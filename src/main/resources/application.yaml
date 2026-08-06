@@ -1,0 +1,49 @@
+server:
+  port: 8080
+
+
+langchain4j:
+  open-ai:
+    chat-model:
+      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      api-key: "sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"
+      model-name: "qwen-plus"
+      temperature: 0.5
+    streaming-chat-model:
+      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      api-key: "sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"
+      model-name: "qwen-plus"
+      temperature: 0.5
+      log-requests: true
+      log-responses: true
+    # DashScope文本向量模型（兼容OpenAI接口），维度1536，与rag.elasticsearch.embedding-dimension保持一致
+    embedding-model:
+      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+      api-key: "sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"
+      model-name: "text-embedding-v2"
+      log-requests: true
+      log-responses: true
+
+# ========== Elasticsearch 配置 ==========
+spring:
+  elasticsearch: # elastic-search 配置（服务器版本 9.4.4，无鉴权）
+    host: 218.244.140.199
+    port: 9200
+    connectTimeout: 5000 # 连接超时时间 单位 毫秒
+    socketTimeout: 10000 # 读取超时时间 单位 毫秒
+    batchSize: 100 # 批次发送容量阈值
+    flushInterval: 5 # 批次发送时间间隔（秒）阈值
+    bufferCapacitySize: 3000 # 缓冲区容量上限值
+    bufferRestoreSize: 2000 # 缓冲区恢复写入值
+
+# ========== RAG向量存储自定义配置 ==========
+rag:
+  elasticsearch:
+    # 向量索引名称（LangChain4j存储embedding的索引）
+    index-name: rag_embeddings
+    # 启动时删除旧索引重建（首次部署或索引结构变更时设为 true，正常运行时设为 false）
+    delete-on-startup: true
+
+#logging:
+#  level:
+#    dev: debug
