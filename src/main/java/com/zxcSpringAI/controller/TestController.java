@@ -16,7 +16,12 @@ import reactor.core.publisher.Flux;
 import java.util.List;
 
 /**
- * RAG 测试接口
+ * 知识问答接口
+ *
+ * 提供基于知识库向量检索的问答能力：
+ * 1) 调用内容检索器从 Elasticsearch 向量索引中查询相似片段；
+ * 2) 将用户问题及检索片段交由声明式 AI 服务生成回答；
+ * 3) 生成结果以流式文本响应返回。
  */
 @RestController
 @RequestMapping("/test")
@@ -32,29 +37,30 @@ public class TestController {
     private ContentRetriever myContentRetriever;
 
     /**
-     * RAG 问答接口（流式输出）
-     * 流程：向量相似度检索 -> AI 结合上下文生成回答 -> Flux 流式返回
+     * 问答接口（流式输出）
+     *
+     * @param message 用户问题
+     * @return 流式文本回答（按 DashScope 流式模型分块返回）
      */
     @GetMapping(value = "/message/{message}", produces = "text/html;charset=UTF-8")
     public Flux<String> getMessage(@PathVariable String message) {
-        // 1. 先执行向量检索（用于日志排查，AI Service 内部会再检索一次）
+        // 内容检索：先对问题进行向量相似度检索，命中结果用于后续日志排查
         try {
             List<Content> contents = myContentRetriever.retrieve(Query.from(message));
-            log.info("[RAG] 命中片段数={}，问题=\"{}\"，片段预览：{}",
+            log.info("[问答接口] 命中片段数={}，问题=\"{}\"，片段预览：{}",
                     contents.size(), message, preview(contents));
         } catch (Exception e) {
-            log.error("[RAG] 向量检索失败: {}", e.getMessage());
-            printEsRootCause(e);
+            log.error("[问答接口] 向量检索失败: {}", e.getMessage());
+            printEsError(e);
             throw new RuntimeException("向量检索失败：" + e.getMessage(), e);
         }
-        // 2. 交给 LangChain4j AI Service（自动装配 chatMemory + 检索器 + 流式对话模型）
+        // 交由 AI 服务生成回答（内部会再次读取对话历史与检索片段后发送给模型）
         return myAIService.chat(message);
     }
 
-    // ======================================================================
-    // 辅助方法
-    // ======================================================================
-
+    /**
+     * 将命中片段拼接为简要预览字符串，用于日志输出
+     */
     private static String preview(List<Content> contents) {
         if (contents == null || contents.isEmpty()) return "(none)";
         StringBuilder sb = new StringBuilder();
@@ -67,10 +73,10 @@ public class TestController {
     }
 
     /**
-     * 解析并打印 ES 的结构化错误（root_cause / caused_by / type / reason）
-     * 避免只看到 "all shards failed" 而定位不到真实问题
+     * 解析并输出 Elasticsearch 结构化错误信息（类型、原因、链式原因、根原因），
+     * 便于根据 ES 返回内容直接判断问题来源（字段、分片、查询语法等）。
      */
-    private static void printEsRootCause(Throwable e) {
+    private static void printEsError(Throwable e) {
         Throwable c = e;
         while (c != null) {
             if (c instanceof ElasticsearchException esEx) {

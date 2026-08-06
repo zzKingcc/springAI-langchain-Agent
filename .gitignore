@@ -38,4 +38,4 @@ build/
 .DS_Store
 
 ###  txt  ###
-/src/main/resources/ragDatabase
+/src/main/resources/ragDatabase/
