@@ -1,4 +1,4 @@
-package com.zxcSpringAI.config;
+package com.zxcSpringAI.model;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

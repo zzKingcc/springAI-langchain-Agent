@@ -1,8 +1,8 @@
 package com.zxcSpringAI;
 
 
-import com.zxcSpringAI.config.RagElasticsearchProperties;
-import com.zxcSpringAI.config.SpringElasticsearchProperties;
+import com.zxcSpringAI.model.RagElasticsearchProperties;
+import com.zxcSpringAI.model.SpringElasticsearchProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
