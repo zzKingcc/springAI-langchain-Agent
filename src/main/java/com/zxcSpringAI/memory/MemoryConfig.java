@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 /**
  * 会话记忆配置
@@ -25,7 +25,7 @@ import org.springframework.data.redis.core.RedisTemplate;
  *   RedisChatMemoryStore（持久化到 Redis，TTL=30 分钟）
  *       │
  *       ▼
- *   Redis: chat:memory:{sessionId} → Hash<index, ChatMessage JSON>
+ *   Redis: chat:memory:{sessionId} → String（ChatMessageSerializer 序列化的 JSON）
  * </pre>
  *
  * <h3>核心设计</h3>
@@ -54,11 +54,11 @@ public class MemoryConfig {
      * Redis 会话记忆存储 Bean
      */
     @Bean
-    public RedisChatMemoryStore redisChatMemoryStore(RedisTemplate<String, Object> redisTemplate) {
+    public RedisChatMemoryStore redisChatMemoryStore(StringRedisTemplate stringRedisTemplate) {
         String ttlText = SESSION_TTL != null ? SESSION_TTL.toMinutes() + " 分钟" : "永久";
         log.info("[会话记忆] RedisChatMemoryStore 初始化，双约束：maxMessages={} 条（≈{} 轮问答），maxTokens={} tokens（问答累计），TTL={}",
                 MAX_MESSAGES, MAX_MESSAGES / 2, MAX_TOKENS, ttlText);
-        return new RedisChatMemoryStore(redisTemplate);
+        return new RedisChatMemoryStore(stringRedisTemplate);
     }
 
     /**

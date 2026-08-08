@@ -27,15 +27,13 @@ import java.util.Map;
  *   <li>PDF 类型：{@link com.zxcSpringAI.processor.PdfDocumentProcessStrategy} — 占位，仅打日志</li>
  *   <li>Word 类型：{@link com.zxcSpringAI.processor.WordDocumentProcessStrategy} — 占位，仅打日志</li>
  *   <li>Excel 类型：{@link com.zxcSpringAI.processor.ExcelDocumentProcessStrategy} — 占位，仅打日志</li>
- *   <li>PPT 类型：{@link com.zxcSpringAI.processor.PptDocumentProcessStrategy} — 占位，仅打日志</li>
  *   <li>图片类型：{@link com.zxcSpringAI.processor.ImageDocumentProcessStrategy} — 占位，仅打日志</li>
- *   <li>压缩包类型：{@link com.zxcSpringAI.processor.ArchiveDocumentProcessStrategy} — 占位，仅打日志</li>
  *   <li>未知类型：{@link com.zxcSpringAI.processor.UnknownDocumentProcessStrategy} — 兜底，仅打日志</li>
  * </ul>
  *
  * 扩展新文件类型只需两步：
  *   1. 在 processor 包下新建策略类，实现 {@link DocumentProcessStrategy}；
- *   2. 在 {@link DocumentProcessStrategyFactory#ALL_STRATEGIES} 注册新实例。
+ *   2. 在 {@link DocumentProcessStrategyFactory} 注册新实例。
  */
 @Slf4j
 public class DocumentIngestor {

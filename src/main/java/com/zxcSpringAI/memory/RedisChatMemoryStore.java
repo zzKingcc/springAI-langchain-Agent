@@ -2,16 +2,16 @@ package com.zxcSpringAI.memory;
 
 import com.zxcSpringAI.exception.ChatMemoryException;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.ChatMessageDeserializer;
+import dev.langchain4j.data.message.ChatMessageSerializer;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 基于 Redis 的会话记忆持久化存储
@@ -22,14 +22,17 @@ import java.util.Map;
  * <h3>Redis Key 设计</h3>
  * <pre>
  *   chat:memory:{sessionId}
- *     ├── 类型：Hash
- *     ├── Field：消息索引（0, 1, 2...）
- *     ├── Value：ChatMessage 的 JSON 序列化
+ *     ├── 类型：String
+ *     ├── Value：ChatMessageSerializer.messagesToJson() 序列化的 JSON 字符串
  *     └── TTL：永久（后期根据业务需要改为有限时长，如 30 分钟）
  * </pre>
  *
+ * <h3>序列化方式</h3>
+ * <p>使用 langchain4j 原生的 {@link ChatMessageSerializer} / {@link ChatMessageDeserializer}
+ * 进行消息序列化，避免 Jackson 对 langchain4j 消息类（如 SystemMessage）反序列化时的构造器缺失问题。</p>
+ *
  * <h3>多会话隔离</h3>
- * <p>每个 sessionId 对应独立的 Hash Key，不同用户/会话互不干扰。
+ * <p>每个 sessionId 对应独立的 Redis Key，不同用户/会话互不干扰。
  * 配合 {@code @MemoryId} 注解实现按会话路由。</p>
  */
 public class RedisChatMemoryStore implements ChatMemoryStore {
@@ -42,9 +45,9 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
     /** 会话记忆过期时间：null 表示永久不过期（后期根据业务需要再改为有限时长） */
     private static final Duration TTL = null;
 
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-    public RedisChatMemoryStore(RedisTemplate<String, Object> redisTemplate) {
+    public RedisChatMemoryStore(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
@@ -52,45 +55,26 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
     public List<ChatMessage> getMessages(Object memoryId) {
         String key = buildKey(memoryId);
         try {
-            // HGETALL 同时拿 field（索引）和 value（消息），保证可以按 field 恢复写入顺序
-            Map<Object, Object> rawMap = redisTemplate.opsForHash().entries(key);
+            String json = redisTemplate.opsForValue().get(key);
 
-            if (rawMap == null || rawMap.isEmpty()) {
+            if (json == null || json.isBlank()) {
                 log.debug("[会话记忆] 读取会话[{}]：无历史消息", memoryId);
                 return new ArrayList<>();
             }
 
-            // 先收集成 List<{索引, 消息}> 对
-            List<Map.Entry<Object, Object>> entries = new ArrayList<>(rawMap.entrySet());
-
-            // 核心：按 field（数字索引字符串）升序排序，保证上下文问答顺序正确
-            // 无法解析为数字的 field 放到最后并告警
-            entries.sort(Comparator.comparingInt(entry -> {
-                try {
-                    return Integer.parseInt(entry.getKey().toString());
-                } catch (NumberFormatException e) {
-                    log.warn("[会话记忆] 会话[{}]发现无法解析的消息索引字段：{}，放到末尾", memoryId, entry.getKey());
-                    return Integer.MAX_VALUE;
-                }
-            }));
-
-            // 按排序后的顺序组装消息列表
-            List<ChatMessage> messages = new ArrayList<>(entries.size());
-            for (Map.Entry<Object, Object> entry : entries) {
-                Object raw = entry.getValue();
-                if (raw instanceof ChatMessage msg) {
-                    messages.add(msg);
-                } else if (raw != null) {
-                    log.warn("[会话记忆] 会话[{}]索引[{}]存在无法反序列化的消息类型：{}",
-                            memoryId, entry.getKey(), raw.getClass());
-                }
-            }
-
-            log.debug("[会话记忆] 读取会话[{}]：{} 条历史消息（已按索引排序）", memoryId, messages.size());
+            List<ChatMessage> messages = ChatMessageDeserializer.messagesFromJson(json);
+            log.debug("[会话记忆] 读取会话[{}]：{} 条历史消息", memoryId, messages.size());
             return messages;
         } catch (ChatMemoryException e) {
             throw e;
         } catch (Exception e) {
+            // 旧数据兼容：之前用 Hash + Jackson 序列化存储，切换为 String + langchain4j 序列化后，
+            // 读取旧 Hash key 会触发 WRONGTYPE（嵌套在 cause 链中）。此时删除旧 key，返回空列表。
+            if (containsWrongType(e)) {
+                log.warn("[会话记忆] 会话[{}]存在旧格式数据（Hash类型），已自动清除并重置", memoryId);
+                redisTemplate.delete(key);
+                return new ArrayList<>();
+            }
             log.error("[会话记忆] 读取会话[{}]失败：{}", memoryId, e.getMessage(), e);
             throw new ChatMemoryException("读取会话记忆失败: " + e.getMessage(), e);
         }
@@ -100,20 +84,15 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String key = buildKey(memoryId);
         try {
-            // 先清除旧消息，再写入新消息
-            redisTemplate.delete(key);
-
             if (messages == null || messages.isEmpty()) {
+                redisTemplate.delete(key);
                 log.debug("[会话记忆] 会话[{}]消息列表为空，已清除旧记录", memoryId);
                 return;
             }
 
-            // 逐条写入 Hash，field 为索引
-            for (int i = 0; i < messages.size(); i++) {
-                redisTemplate.opsForHash().put(key, String.valueOf(i), messages.get(i));
-            }
+            String json = ChatMessageSerializer.messagesToJson(messages);
+            redisTemplate.opsForValue().set(key, json);
 
-            // 刷新 TTL（TTL 为 null 表示永久不过期，跳过 expire）
             if (TTL != null) {
                 redisTemplate.expire(key, TTL);
                 log.debug("[会话记忆] 更新会话[{}]：写入 {} 条消息，TTL={} 分钟",
@@ -146,5 +125,21 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
 
     private String buildKey(Object memoryId) {
         return KEY_PREFIX + memoryId;
+    }
+
+    /**
+     * 遍历异常 cause 链，检查是否包含 WRONGTYPE（Redis key 类型不匹配）。
+     * 顶层异常消息通常只有 "Error in execution"，真正的 WRONGTYPE 在嵌套 cause 中。
+     */
+    private boolean containsWrongType(Throwable e) {
+        Throwable current = e;
+        while (current != null) {
+            String msg = current.getMessage();
+            if (msg != null && msg.contains("WRONGTYPE")) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }

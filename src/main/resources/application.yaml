@@ -5,23 +5,23 @@ server:
 langchain4j:
   open-ai:
     chat-model:
-      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-      api-key: ${DASHSCOPE_API_KEY:"sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"}
-      model-name: "qwen-plus"
+      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
+      model-name: "qwen3.7-plus"
       temperature: 0.5
       max-tokens: 2048
     streaming-chat-model:
-      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-      api-key: ${DASHSCOPE_API_KEY:"sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"}
-      model-name: "qwen-plus"
+      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
+      model-name: "qwen3.7-plus"
       temperature: 0.5
       max-tokens: 2048
 #      log-requests: true
 #      log-responses: true
     # DashScope文本向量模型（兼容OpenAI接口），维度1536，与rag.elasticsearch.embedding-dimension保持一致
     embedding-model:
-      base-url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-      api-key: ${DASHSCOPE_API_KEY:"sk-ws-H.RPEXPDI.v4Vc.MEQCIHb5WtjlGx6gNXmcTTDhZu0vEGTeT3UvuKIUb_G-okenAiBG4gx5sjjmOsW3vmYAbMLkL4G1DPZWnyG3i4Ffm4tLRQ"}
+      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
       model-name: "text-embedding-v2"
 #      log-requests: true
 #      log-responses: true
@@ -42,7 +42,7 @@ spring:
       # Redis地址对齐网关
       host: ${REDIS_HOST:218.244.140.199}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      password: ${REDIS_PASSWORD:zxc404.202}
       database: 0
       timeout: 2000ms
       lettuce:

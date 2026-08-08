@@ -30,9 +30,7 @@ public class DocumentProcessStrategyFactory {
             new PdfDocumentProcessStrategy(),     // .pdf
             new WordDocumentProcessStrategy(),    // .doc .docx
             new ExcelDocumentProcessStrategy(),   // .xls .xlsx
-            new PptDocumentProcessStrategy(),     // .ppt .pptx
-            new ImageDocumentProcessStrategy(),   // .png .jpg ...
-            new ArchiveDocumentProcessStrategy()  // .zip .rar ...
+            new ImageDocumentProcessStrategy()   // .png .jpg ...
     );
 
     /** 扩展名 → 策略 的映射缓存（首次访问 build） */

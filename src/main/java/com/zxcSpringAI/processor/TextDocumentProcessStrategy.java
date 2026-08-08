@@ -41,6 +41,9 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
     /** ES terms 查询单次最大条数（避免超出 ES terms_size 限制） */
     private static final int ES_TERMS_BATCH_SIZE = 10000;
 
+    /** 百炼 text-embedding-v2 单次请求最大行数（超出返回 400 InvalidParameter） */
+    private static final int EMBEDDING_BATCH_SIZE = 25;
+
     @Override
     public int process(List<Document> documents,
                        ElasticsearchClient esClient,
@@ -121,13 +124,24 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
         log.info("[文档处理-{}][文本类型] 去重后待写入 {} 个新片段（原始 {}，批次内重复 {}，ES已存在 {}）",
                 sourceTag, newSegments.size(), allSegments.size(), batchDupCount, esDupCount);
 
-        // ===== 5. 批量向量化 + 写入 =====
-        log.info("[文档处理-{}][文本类型] 开始向量化写入...", sourceTag);
+        // ===== 5. 分批向量化 + 写入 =====
+        // text-embedding-v2 单次请求最大 25 行，超出会返回 400 InvalidParameter
+        log.info("[文档处理-{}][文本类型] 开始向量化写入（共 {} 个片段，每批 {} 个）...",
+                sourceTag, newSegments.size(), EMBEDDING_BATCH_SIZE);
         try {
-            Response<List<Embedding>> embedResp = embeddingModel.embedAll(newSegments);
-            List<Embedding> embeddings = embedResp.content();
-            for (int i = 0; i < newSegments.size(); i++) {
-                embeddingStore.add(embeddings.get(i), newSegments.get(i));
+            int total = newSegments.size();
+            int written = 0;
+            for (int start = 0; start < total; start += EMBEDDING_BATCH_SIZE) {
+                int end = Math.min(start + EMBEDDING_BATCH_SIZE, total);
+                List<TextSegment> batch = newSegments.subList(start, end);
+
+                Response<List<Embedding>> embedResp = embeddingModel.embedAll(batch);
+                List<Embedding> embeddings = embedResp.content();
+                for (int i = 0; i < batch.size(); i++) {
+                    embeddingStore.add(embeddings.get(i), batch.get(i));
+                }
+                written += batch.size();
+                log.info("[文档处理-{}][文本类型] 向量化进度: {}/{}", sourceTag, written, total);
             }
             log.info("[文档处理-{}][文本类型] 写入完成，新增 {} 个片段。", sourceTag, newSegments.size());
         } catch (Exception e) {

@@ -3,6 +3,7 @@ package com.zxcSpringAI.aiService;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 import dev.langchain4j.service.spring.AiService;
 import dev.langchain4j.service.spring.AiServiceWiringMode;
 import reactor.core.publisher.Flux;
@@ -42,7 +43,10 @@ public interface MyAIService {
             5. 回答中引用知识库内容时，可以注明来源文件名和章节（如果上下文中有附带）；
             6. 【重要】回答必须精炼简洁，单次回答不得超过 500 字，禁止冗余展开、重复说明或大段复述原文。简单问题 1~3 句内答完，复杂问题用 3~5 条要点列出，避免输出过长挤占多轮上下文窗口。
             """)
-    @UserMessage("用户问题：{{it}}\n（相关知识库内容将由系统自动附加在问题下方，请务必且仅基于下方内容回答）")
-    Flux<String> chat(@MemoryId String sessionId, @dev.langchain4j.service.V String message);
+    @UserMessage("""
+            用户问题：{{message}}
+            （相关知识库内容将由系统自动附加在问题下方，请务必且仅基于下方内容回答）
+            """)
+    Flux<String> chat(@MemoryId String sessionId, @V("message") String message);
 
 }

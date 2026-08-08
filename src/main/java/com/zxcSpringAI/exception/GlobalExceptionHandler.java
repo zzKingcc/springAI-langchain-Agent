@@ -8,6 +8,7 @@ import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Map;
  *   <li>{@link IllegalArgumentException} → 400，参数校验异常</li>
  *   <li>{@link MissingPathVariableException} → 400，路径参数缺失</li>
  *   <li>{@link MethodArgumentTypeMismatchException} → 400，参数类型不匹配</li>
+ *   <li>{@link NoResourceFoundException} → 404，静态资源未找到（favicon.ico 等静默处理）</li>
  *   <li>{@link RuntimeException} → 500，未预期的运行时异常</li>
  *   <li>{@link Exception} → 500，兜底</li>
  * </ol>
@@ -73,6 +75,19 @@ public class GlobalExceptionHandler {
         log.warn("[全局异常] 参数类型不匹配：{}", e.getMessage());
         return buildResponse(HttpStatus.BAD_REQUEST.value(), "参数类型不匹配",
                 "参数 " + e.getName() + " 期望类型：" + e.getRequiredType().getSimpleName());
+    }
+
+    // ==================== 静态资源异常 ====================
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResourceFoundException(NoResourceFoundException e) {
+        String resourcePath = e.getResourcePath();
+        // 浏览器自动请求的 favicon.ico 等资源缺失属正常现象，静默返回 404，避免污染日志
+        if ("favicon.ico".equals(resourcePath)) {
+            return ResponseEntity.notFound().build();
+        }
+        log.debug("[全局异常] 静态资源未找到：{}", resourcePath);
+        return buildResponse(HttpStatus.NOT_FOUND.value(), "资源未找到", "请求的资源不存在：" + resourcePath);
     }
 
     // ==================== 运行时异常 ====================
