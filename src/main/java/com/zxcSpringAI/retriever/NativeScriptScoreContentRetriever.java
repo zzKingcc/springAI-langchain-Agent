@@ -3,6 +3,7 @@ package com.zxcSpringAI.retriever;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.json.JsonData;
+import com.zxcSpringAI.exception.KnowledgeBaseException;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.rag.content.Content;
@@ -93,7 +94,7 @@ public class NativeScriptScoreContentRetriever implements ContentRetriever {
             return out;
         } catch (IOException e) {
             log.error("[ES检索] 查询异常: {}", e.getMessage(), e);
-            throw new RuntimeException("ES 检索异常: " + e.getMessage(), e);
+            throw new KnowledgeBaseException("ES 向量检索异常: " + e.getMessage(), e);
         }
     }
 }

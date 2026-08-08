@@ -8,8 +8,6 @@ import com.zxcSpringAI.retriever.NativeScriptScoreContentRetriever;
 import com.zxcSpringAI.util.DocumentIngestor;
 import com.zxcSpringAI.util.VectorStoreUtil;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.memory.ChatMemory;
-import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.elasticsearch.ElasticsearchConfigurationScript;
@@ -25,16 +23,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @EnableConfigurationProperties(RagElasticsearchProperties.class)
 public class AiConfig {
-
-    /**
-     * 对话记忆：保留最近 10 条消息，用于多轮问答上下文维持
-     */
-    @Bean
-    public ChatMemory chatMemory() {
-        return MessageWindowChatMemory.builder()
-                .maxMessages(10)
-                .build();
-    }
 
     /**
      * 组合检索器（向量检索 Top15 + 关键词检索 Top5）

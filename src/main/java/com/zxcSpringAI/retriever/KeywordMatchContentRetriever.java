@@ -3,6 +3,7 @@ package com.zxcSpringAI.retriever;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
+import com.zxcSpringAI.exception.KnowledgeBaseException;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.rag.content.Content;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;
@@ -76,7 +77,7 @@ public class KeywordMatchContentRetriever implements ContentRetriever {
             return out;
         } catch (IOException e) {
             log.error("[ES关键词检索] 查询异常: {}", e.getMessage(), e);
-            throw new RuntimeException("ES 关键词检索异常: " + e.getMessage(), e);
+            throw new KnowledgeBaseException("ES 关键词检索异常: " + e.getMessage(), e);
         }
     }
 }

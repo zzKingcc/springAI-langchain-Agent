@@ -19,6 +19,8 @@ import reactor.core.publisher.Flux;
  *
  * <p>检索逻辑由 {@code @AiService(contentRetriever = "myContentRetriever")} 声明式注入，
  * Controller 层无需手动调用检索器，避免重复查询。</p>
+ *
+ * <p>会话记忆通过 {@code sessionId} 隔离，Redis 持久化，支持多轮对话。</p>
  */
 @RestController
 @RequestMapping("/test")
@@ -35,11 +37,13 @@ public class TestController {
      * <p>检索 → Prompt 组装 → 模型调用 全部由 {@link MyAIService} 内部自动完成，
      * Controller 仅负责接收请求并返回流式响应。</p>
      *
+     * @param sessionId 会话 ID，用于多轮对话记忆隔离（同一 sessionId 共享上下文）
      * @param message 用户问题
      * @return 流式文本回答（按 DashScope 流式模型分块返回）
      */
-    @GetMapping(value = "/message/{message}", produces = "text/html;charset=UTF-8")
-    public Flux<String> getMessage(@PathVariable String message) {
-        return myAIService.chat(message);
+    @GetMapping(value = "/message/{sessionId}/{message}", produces = "text/html;charset=UTF-8")
+    public Flux<String> getMessage(@PathVariable String sessionId, @PathVariable String message) {
+        log.info("[问答接口] 会话[{}] 收到问题：{}", sessionId, message);
+        return myAIService.chat(sessionId, message);
     }
 }

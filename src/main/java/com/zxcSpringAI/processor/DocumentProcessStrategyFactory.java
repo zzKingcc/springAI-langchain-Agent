@@ -1,5 +1,6 @@
 package com.zxcSpringAI.processor;
 
+import com.zxcSpringAI.exception.KnowledgeBaseException;
 import dev.langchain4j.data.document.Document;
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +45,7 @@ public class DocumentProcessStrategyFactory {
                 String lowerExt = ext.toLowerCase(Locale.ROOT);
                 DocumentProcessStrategy prev = EXT_TO_STRATEGY.put(lowerExt, strategy);
                 if (prev != null) {
-                    throw new IllegalStateException(
+                    throw new KnowledgeBaseException(
                             "[策略工厂] 扩展名冲突: ." + lowerExt + " 同时被 ["
                                     + prev.strategyName() + "] 和 [" + strategy.strategyName() + "] 覆盖，请检查 supportedExtensions() 列表。");
                 }
@@ -69,7 +70,7 @@ public class DocumentProcessStrategyFactory {
             return ALL_STRATEGIES.stream()
                     .filter(s -> s instanceof TextDocumentProcessStrategy)
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("[策略工厂] 未注册 TextDocumentProcessStrategy"));
+                    .orElseThrow(() -> new KnowledgeBaseException("[策略工厂] 未注册 TextDocumentProcessStrategy"));
         }
         DocumentProcessStrategy s = EXT_TO_STRATEGY.get(ext.toLowerCase(Locale.ROOT));
         if (s != null) return s;
