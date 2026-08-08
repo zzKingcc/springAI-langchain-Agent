@@ -9,9 +9,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties({RagElasticsearchProperties.class, SpringElasticsearchProperties.class})
+@Slf4j
 public class SpringRagApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(SpringRagApplication.class, args);
+        log.info("Agent 启动成功");
     }
 }

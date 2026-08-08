@@ -4,11 +4,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Elasticsearch 连接配置
- *
- * 对应 application.yaml 中 spring.elasticsearch.* 配置项，
- * 用于构建 RestClient 与 ElasticsearchClient 客户端。
- * 当服务器未开启鉴权时，username 与 password 可留空。
+ * Elasticsearch 连接配置模型
  */
 @Data
 @ConfigurationProperties(prefix = "spring.elasticsearch")

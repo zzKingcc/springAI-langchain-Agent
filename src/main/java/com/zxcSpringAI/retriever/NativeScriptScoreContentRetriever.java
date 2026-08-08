@@ -17,8 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 召回设置
- * 余弦相似度检索器
+ * 召回设置 - 余弦相似度检索器
  */
 public class NativeScriptScoreContentRetriever implements ContentRetriever {
 

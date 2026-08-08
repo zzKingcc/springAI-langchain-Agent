@@ -2,6 +2,8 @@ package com.zxcSpringAI.config;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.zxcSpringAI.model.RagElasticsearchProperties;
+import com.zxcSpringAI.retriever.CompositeContentRetriever;
+import com.zxcSpringAI.retriever.KeywordMatchContentRetriever;
 import com.zxcSpringAI.retriever.NativeScriptScoreContentRetriever;
 import com.zxcSpringAI.util.DocumentIngestor;
 import com.zxcSpringAI.util.VectorStoreUtil;
@@ -18,15 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * 知识问答核心装配
- *
- * 作为 AI 能力的 Spring 配置入口，集中声明以下 Bean：
- * 1) 对话记忆：保留最近消息窗口，用于多轮问答上下文；
- * 2) 向量存储：基于 ElasticsearchEmbeddingStore，装配前执行启动诊断与索引清理，
- *    装配后执行知识库文档导入与写入后校验；
- * 3) 内容检索器：基于高级客户端 script_score 查询实现，从向量索引检索相似片段。
- * ES 客户端（RestClient 作为基底、ElasticsearchClient 作为封装 API）由独立的
- * ElasticsearchConfig 负责装配。
+ * AI 配置类
  */
 @Configuration
 @EnableConfigurationProperties(RagElasticsearchProperties.class)
@@ -43,30 +37,42 @@ public class AiConfig {
     }
 
     /**
-     * 余弦相似度检索器：将用户问题转成向量后，在 ES 中以余弦相似度检索知识片段。（构建 script_score 查询）
+     * 组合检索器（向量检索 Top15 + 关键词检索 Top5）
+     *
+     * <p>向量检索负责语义泛化召回，关键词检索负责精确术语/型号/编号命中，两路结果合并去重后返回。
+     * 任一路检索异常不中断另一路，保证可用性。</p>
      */
     @Bean
     public ContentRetriever myContentRetriever(
             ElasticsearchClient esClient,
             RagElasticsearchProperties ragEsProps,
             @Qualifier("openAiEmbeddingModel") EmbeddingModel embeddingModel) {
-        return new NativeScriptScoreContentRetriever(
+
+        // 向量检索：余弦相似度，Top15，minScore=0.2
+        NativeScriptScoreContentRetriever vectorRetriever = new NativeScriptScoreContentRetriever(
                 esClient,
                 ragEsProps.getIndexName(),
                 embeddingModel,
                 15,
                 0.2
         );
+
+        // 关键词检索：BM25 match，Top5
+        KeywordMatchContentRetriever keywordRetriever = new KeywordMatchContentRetriever(
+                esClient,
+                ragEsProps.getIndexName(),
+                5
+        );
+
+        return new CompositeContentRetriever(vectorRetriever, keywordRetriever);
     }
 
     /**
      * 向量存储：
-     * 1) 启动时执行 ES 环境诊断（版本、集群健康、索引状态）；
-     * 2) 根据 delete-on-startup 配置清理旧索引；
-     * 3) 构建基于 script_score 的 ElasticsearchEmbeddingStore；
-     * 4) 从 classpath:ragDatabase 加载知识库文档并执行向量化写入；
-     * 5) 写入完成后执行索引校验（文档数、mapping、script_score 查询示例）。
-     * 全部调用均使用 ElasticsearchClient 高级 API。
+     * 1) 判断 ES 环境状态，根据传入开关决定是否重建索引；
+     * 2) 构建基于 script_score 的 ElasticsearchEmbeddingStore；
+     * 3) 加载本地知识库文档，向量写入 ES 索引；
+     * 4) 写入完成后执行索引校验。
      */
     @Bean
     public EmbeddingStore myEmbeddingStore(
@@ -78,6 +84,8 @@ public class AiConfig {
 
         VectorStoreUtil.diagnoseElasticsearch(esClient, indexName);
         VectorStoreUtil.deleteIndexIfNeeded(esClient, indexName, ragEsProps.isDeleteOnStartup());
+        // 删除旧索引后、LangChain4j 构建前，创建带 IK 分词器的自定义 mapping（支持后续混合检索）
+        VectorStoreUtil.createIndexWithIkMapping(esClient, indexName, 1536);
 
         ElasticsearchEmbeddingStore embeddingStore = ElasticsearchEmbeddingStore.builder()
                 .client(esClient)
@@ -85,7 +93,7 @@ public class AiConfig {
                 .configuration(ElasticsearchConfigurationScript.builder().build())
                 .build();
 
-        DocumentIngestor.ingestKnowledgeBase(embeddingStore, embeddingModel);
+        DocumentIngestor.ingestKnowledgeBase(esClient, indexName, embeddingStore, embeddingModel);
         VectorStoreUtil.writeAfterVerify(esClient, indexName);
         return embeddingStore;
     }

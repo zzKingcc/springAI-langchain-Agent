@@ -14,19 +14,11 @@ import java.util.Map;
 
 /**
  * 向量索引操作工具
- *
- * 封装与 Elasticsearch 向量索引相关的辅助操作，全部通过 ElasticsearchClient 高级 API 实现：
- * 1) 启动环境诊断：集群版本、健康状态、索引存在性与字段 mapping；
- * 2) 旧索引删除：根据配置项决定启动时是否清理索引；
- * 3) 写入后校验：刷新索引、文档计数、字段 mapping 展示、script_score 示例查询；
- * 4) mapping 解析：将 ES Property 类型转为可读名称。
  */
+@Slf4j
 public class VectorStoreUtil {
 
-    private static final Logger log = LoggerFactory.getLogger(VectorStoreUtil.class);
-
-    private VectorStoreUtil() {
-    }
+    private VectorStoreUtil() {}
 
     /**
      * 启动诊断：输出 ES 版本、集群健康、索引存在性及字段结构
@@ -76,7 +68,7 @@ public class VectorStoreUtil {
     }
 
     /**
-     * 按需删除旧索引：当 rag.elasticsearch.delete-on-startup = true 时执行
+     * 按需删除旧索引
      */
     public static void deleteIndexIfNeeded(ElasticsearchClient esClient, String indexName, boolean deleteOnStartup) {
         if (!deleteOnStartup) return;
@@ -86,6 +78,76 @@ public class VectorStoreUtil {
                 log.warn("[ES] 已删除旧索引: {}", indexName);
             }
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * 创建带 IK 分词器的索引 mapping（供混合检索使用）。
+     *
+     * <p>字段设计：</p>
+     * <ul>
+     *   <li>{@code vector}：dense_vector，dims=1536，用于向量余弦相似度检索</li>
+     *   <li>{@code text}：text，写入用 ik_max_word 最大粒度分词，检索用 ik_smart 智能分词；
+     *       附带 .keyword 子字段用于精确匹配/聚合</li>
+     *   <li>{@code metadata}：object，存储 file_name / section_title / content_hash 等元数据</li>
+     * </ul>
+     *
+     * <p>如果 ES 未安装 IK 插件，创建会失败，此时降级为让 LangChain4j 自动创建默认索引。</p>
+     *
+     * @param esClient  ES 客户端
+     * @param indexName 索引名
+     * @param dims      向量维度（与 EmbeddingModel 输出一致，如 1536）
+     */
+    public static void createIndexWithIkMapping(ElasticsearchClient esClient, String indexName, int dims) {
+        try {
+            boolean exists = esClient.indices().exists(e -> e.index(indexName)).value();
+            if (exists) {
+                log.info("[ES] 索引[{}]已存在，跳过创建IK mapping", indexName);
+                return;
+            }
+
+            // 使用原始 JSON 构建 mapping（Java API Builder 对 analyzer 支持不直观）
+            String mappingJson = """
+                    {
+                      "properties": {
+                        "vector": {
+                          "type": "dense_vector",
+                          "dims": %d,
+                          "index": true,
+                          "similarity": "cosine"
+                        },
+                        "text": {
+                          "type": "text",
+                          "analyzer": "ik_max_word",
+                          "search_analyzer": "ik_smart",
+                          "fields": {
+                            "keyword": {
+                              "type": "keyword",
+                              "ignore_above": 256
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "enabled": true,
+                          "properties": {
+                            "file_name":     { "type": "keyword" },
+                            "section_title": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+                            "content_hash":  { "type": "keyword" }
+                          }
+                        }
+                      }
+                    }
+                    """.formatted(dims);
+
+            esClient.indices().create(c -> c
+                    .index(indexName)
+                    .withJson(new java.io.StringReader(mappingJson)));
+
+            log.warn("[ES] 索引[{}]创建成功（IK分词器 mapping，dims={}）", indexName, dims);
+        } catch (Exception e) {
+            log.warn("[ES] 创建IK mapping索引失败（ES可能未安装IK插件），"
+                    + "将降级为LangChain4j默认创建。原因: {}", e.getMessage());
         }
     }
 
