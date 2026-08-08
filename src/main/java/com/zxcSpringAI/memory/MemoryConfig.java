@@ -31,9 +31,9 @@ import org.springframework.data.redis.core.RedisTemplate;
  * <h3>核心设计</h3>
  * <ul>
  *   <li>多会话隔离：每个 sessionId 独立 Redis Key，互不干扰</li>
- *   <li>双约束窗口：消息数 ≤ 50 且 Token 估算 ≤ 30K，满足任一即淘汰最旧消息</li>
+ *   <li>双约束窗口：消息数 ≤ 100 且 Token 估算 ≤ 30K，满足任一即淘汰最旧消息</li>
  *   <li>持久化：Redis 存储，重启不丢失</li>
- *   <li>自动过期：30 分钟无活动的会话自动清除，避免无限膨胀</li>
+ *   <li>TTL 永久：当前不做自动过期，后期根据业务需要再改为有限时长</li>
  * </ul>
  */
 @Configuration
