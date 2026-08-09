@@ -8,23 +8,20 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import java.util.List;
 
 /**
- * 文档处理策略接口（策略模式）
- *
- * <p>不同文件类型对应不同的处理流程，后续扩展 .pdf/.docx 等新类型时，
- * 只需新增实现类并在 {@link DocumentProcessStrategyFactory} 注册映射即可。</p>
+ * 文档处理策略接口
  */
 public interface DocumentProcessStrategy {
 
     /**
-     * 处理一批文档：解析 → 分片 → 去重 → 向量化写入。
+     * 流程：解析 → 分片 → 去重 → 向量化写入。
      *
      * @param documents      待处理的文档列表（已按文件类型分组，全部匹配本策略）
-     * @param esClient       ES 客户端（用于去重查询）
-     * @param indexName      ES 索引名
-     * @param embeddingStore 向量存储实例
-     * @param embeddingModel 文本嵌入模型
-     * @param sourceTag      来源标签（"本地"/"外部"），仅用于日志区分
-     * @return 本次处理成功并实际写入的原始文档数量（非 chunk 数）
+     * @param esClient       
+     * @param indexName      
+     * @param embeddingStore 
+     * @param embeddingModel 
+     * @param sourceTag      来源标签（"本地"/"外部"）
+     * @return 
      */
     int process(List<Document> documents,
                 ElasticsearchClient esClient,
@@ -39,7 +36,7 @@ public interface DocumentProcessStrategy {
     List<String> supportedExtensions();
 
     /**
-     * @return 策略名称（用于日志输出，如 "文本类型"、"PDF类型"、"Office文档类型"）
+     * @return 策略名称
      */
     String strategyName();
 }

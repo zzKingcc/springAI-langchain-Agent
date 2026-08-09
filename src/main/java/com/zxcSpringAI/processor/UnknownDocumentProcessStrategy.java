@@ -10,10 +10,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 未知/未识别文件类型处理策略（兜底）
- *
- * <p>当文件扩展名未被任何已注册策略识别时，走本策略。<br>
- * 仅输出错误日志，不执行任何写入，等待后续补充解析器。</p>
+ * 未知/未识别文件类型处理策略
  */
 @Slf4j
 public class UnknownDocumentProcessStrategy implements DocumentProcessStrategy {
@@ -31,9 +28,8 @@ public class UnknownDocumentProcessStrategy implements DocumentProcessStrategy {
                        EmbeddingModel embeddingModel,
                        String sourceTag) {
         for (Document doc : documents) {
-            log.error("[文档处理-{}][未知类型] ⚠ 文件[{}]的扩展名未识别，当前版本暂不支持该类型，已跳过。" +
-                            "如需支持，请在 DocumentProcessStrategyFactory 注册对应的解析策略。",
-                    sourceTag, safeFileName(doc));
+            log.error("[分片写入-{}][{}] ⚠ 文件[{}]的扩展名未识别，当前版本暂不支持该类型，已跳过。",
+                    sourceTag, strategyName(), safeFileName(doc));
         }
         return 0;
     }

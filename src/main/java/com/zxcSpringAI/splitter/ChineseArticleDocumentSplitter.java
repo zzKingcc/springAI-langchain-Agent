@@ -13,75 +13,37 @@ import java.util.regex.Pattern;
 
 /**
  * 中文文章文档分片器
- *
- * 通用适配各类中文纯文本（.txt/.md导出的纯文本等），与行业无关。
- * 分片策略：
- * ① 先用正则匹配中文/数字/字母/圆圈号/方括号等多种常见的编号标题行，
- *    按"自然章节/段落"切块，尽量保留语义完整性；
- * ② 每个章节块字符数超过阈值时，再用 LangChain4j 内置的 recursive splitter 兜底切分；
- * ③ 每个切分后 TextSegment 的 metadata 注入：来源文件名(file_name) + 所属章节标题(section_title)，
- *    便于检索命中时模型能感知该片段在原文中的结构位置，提升引用准确性。
- *
- * 支持的标题行示例（持续扩展中）：
- *   一、二、三、  十、百、
- *   第一章 / 第二节 / 第三条 / 第一部分 / 第四篇
- *   1.  2.3  4.5.6   1、  2、  3．
- *   (1)  (2)  (三)
- *   ① ② ③  ⑪ ⑫
- *   【一】  【摘要】  【结论】
- *   ##  ###  ####（Markdown 标题，兼容导出的 txt）
- *   A.  B.  C. （大写字母 + 点，外文翻译类文档常用）
- *   附录A / 附录一 / 附表 3
  */
 public class ChineseArticleDocumentSplitter implements DocumentSplitter {
 
     private static final Logger log = LoggerFactory.getLogger(ChineseArticleDocumentSplitter.class);
 
-    // ===== 中文编号标题行正则：覆盖尽可能多的通用编号形式 =====
-    // 设计原则：宁可多匹配，不漏章节；误判的小片段可以靠后续相似度过滤。
     private static final Pattern SECTION_HEADER = Pattern.compile(
             "^\\s*" +
             "(?:" +
-              // 1) 中文大写数字+顿号/点：一、 三． 十、 百二、
               "[一二三四五六七八九十百千零〇两]+[、.．]\\s*" +
-
-              // 2) "第X章/节/课/条/部分/篇/卷/编/步/讲/集/回"：第一章 第三步 第二讲
               "|第[一二三四五六七八九十百千零〇两0-9]+[章节课条部分篇卷编步讲集回道单元章节季度册期]+\\s*" +
-
-              // 3) 数字编号（可选多段）：1.  2.1  3.4.5   1、   2．
               "|\\d+(?:\\.\\d+)*[、.．]?\\s+" +
-
-              // 4) 圆括号数字/中文：(1) (2) (三) (十二)
               "|[(（][\\d一二三四五六七八九十百千零〇两]+[)）]\\s*" +
-
-              // 5) 圆圈数字：①~⑳ ㊱~㊿（Unicode 圆圈数字区，直接用范围）
               "|[\\u2460-\\u2473\\u3251-\\u325F\\u32B1-\\u32BF]\\s*" +
-
-              // 6) 方括号中文/关键字：【一】【摘要】【引言】【结论】【附录】【参考文献】
               "|[【\\[][^】\\]]{1,12}[】\\]]\\s*" +
-
-              // 7) 大写字母（A~Z）+ 点/顿号：A.  B、  C．（翻译文献/选择题常用）
               "|[A-Z][、.．]\\s*" +
-
-              // 8) Markdown 标题（兼容导出的 txt / 直接导入 md）
               "|#{1,6}\\s+" +
-
-              // 9) 附录/附表/附图/补充说明：附录A / 附表 3 / 附图二
               "|(?:附录|附表|附图|附页|补充|附件)[\\s一二三四五六七八九十百千零〇两A-Za-z0-9.]*\\s*" +
             ")" +
             ".+$"
     );
 
-    /** 单个章节块超过此字符数时，触发 recursive 兜底切分（中文≈ 1char ≈ 0.8 token） */
+    /** 单段最大字符数阈值，超过则触发兜底递归切分 */
     private static final int MAX_CHARS_PER_SEGMENT = 600;
 
-    /** 兜底切分时的 overlap，避免跨 chunk 丢失句首术语和上下文 */
+    /** 兜底切分时的子段重叠字符数 */
     private static final int OVERLAP_CHARS = 80;
 
-    /** 标题内容最小长度（去掉编号前缀后的正文文字数），避免 "1." "## " 等被误判 */
+    /** 去除编号前缀后标题正文的最小长度，用于减少误判 */
     private static final int MIN_HEADER_TEXT_LEN = 2;
 
-    /** 内部兜底分片器：递归按 段落→句子→字符 降级切分 */
+    /** 兜底分片器：递归按 段落→句子→字符 降级切分 */
     private final DocumentSplitter fallbackSplitter = DocumentSplitters.recursive(
             MAX_CHARS_PER_SEGMENT, OVERLAP_CHARS
     );
@@ -106,7 +68,6 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
             String line = rawLine == null ? "" : rawLine.trim();
 
             if (isSectionHeader(line)) {
-                // 识别到标题：先 flush 前一章节，再开启新章节
                 if (currentSection.length() > 0) {
                     flushSection(currentSection.toString(), currentTitle,
                             sourceFile, document, result);
@@ -120,7 +81,6 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
             }
         }
 
-        // 收尾 flush
         if (currentSection.length() > 0) {
             flushSection(currentSection.toString(), currentTitle,
                     sourceFile, document, result);
@@ -137,11 +97,7 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         return result;
     }
 
-    /**
-     * 输出一个章节块：
-     * - 字符数 <= 阈值 → 直接产出一个 TextSegment；
-     * - 字符数 > 阈值 → 用内置 recursive splitter 兜底切，子段继承父 section_title/file_name。
-     */
+    /** 输出章节块：短章节直接产出，超长章节递归细分 */
     private void flushSection(String sectionText, String sectionTitle,
                               String sourceFile, Document sourceDoc,
                               List<TextSegment> collector) {
@@ -154,7 +110,6 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
             return;
         }
 
-        // 超长章节：包成临时 Document 交给 LangChain4j 内置 recursive splitter 兜底
         Document sectionDoc = Document.from(trimmed, sourceDoc.metadata());
         List<TextSegment> subs = fallbackSplitter.split(sectionDoc);
 
@@ -163,7 +118,7 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         }
     }
 
-    /** 构造 TextSegment，附加 file_name / section_title metadata */
+    /** 构造 TextSegment，注入 file_name 和 section_title 元数据 */
     private TextSegment buildSegment(String text, String sectionTitle,
                                      String sourceFile, Document sourceDoc) {
         dev.langchain4j.data.document.Metadata metadata = sourceDoc.metadata().copy();
@@ -172,11 +127,7 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         return TextSegment.from(text, metadata);
     }
 
-    // ==================== 标题识别辅助 ====================
-
-    /**
-     * 判断一行是否是章节标题：正则匹配 + 内容最小长度双重校验，减少误判
-     */
+    /** 判断是否章节标题：正则匹配 + 正文长度双重校验 */
     private boolean isSectionHeader(String line) {
         if (line == null || line.isBlank()) return false;
         if (!SECTION_HEADER.matcher(line).matches()) return false;
@@ -186,10 +137,7 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         return textLen >= MIN_HEADER_TEXT_LEN;
     }
 
-    /**
-     * 跳过编号前缀，找到第一个真正的"标题正文"字符位置，
-     * 用于判断去除编号后剩余内容长度，避免空编号行误判。
-     */
+    /** 跳过编号前缀，定位到标题正文第一个字符位置 */
     private static int indexOfFirstTitleChar(String line) {
         int i = 0;
         int len = line.length();
@@ -197,38 +145,22 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         if (i >= len) return i;
         char c = line.charAt(i);
 
-        // 分支1：第X章/节/条/...
         if (c == '第') {
             i++;
             while (i < len && !isChapterUnitChar(line.charAt(i))) i++;
             if (i < len) i++;
-        }
-
-        // 分支2：【关键词】 / [关键词] / (编号) /（编号）
-        else if (c == '【' || c == '[' || c == '(' || c == '（') {
+        } else if (c == '【' || c == '[' || c == '(' || c == '（') {
             char close = (c == '【') ? '】' : (c == '[') ? ']' : (c == '(') ? ')' : '）';
             while (i < len && line.charAt(i) != close) i++;
             if (i < len) i++;
-        }
-
-        // 分支3：圆圈数字（Unicode 单字）
-        else if (isCircledNumber(c)) {
+        } else if (isCircledNumber(c)) {
             i++;
-        }
-
-        // 分支4：中文大写数字 + 顿号/点
-        else if (isChineseNumeral(c)) {
+        } else if (isChineseNumeral(c)) {
             while (i < len && isChineseNumeral(line.charAt(i))) i++;
             if (i < len && isPunctuationSeparator(line.charAt(i))) i++;
-        }
-
-        // 分支5：附录 / 附表 / 附图 / 附件 / 补充 + 编号
-        else if (startsWithAppendixKeyword(line, i)) {
+        } else if (startsWithAppendixKeyword(line, i)) {
             i = skipAppendixKeyword(line, i);
-        }
-
-        // 分支6：数字 (0-9) / 英文大写字母 (A-Z) / 井号 (#)
-        else if (Character.isDigit(c) || Character.isUpperCase(c) || c == '#') {
+        } else if (Character.isDigit(c) || Character.isUpperCase(c) || c == '#') {
             while (i < len &&
                     (Character.isDigit(line.charAt(i)) || Character.isUpperCase(line.charAt(i))
                             || line.charAt(i) == '.' || line.charAt(i) == '、' || line.charAt(i) == '．'
@@ -237,7 +169,6 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
             }
         }
 
-        // 跳过尾部空白，返回正文首字符位置
         while (i < len && Character.isWhitespace(line.charAt(i))) i++;
         return i;
     }
@@ -294,6 +225,7 @@ public class ChineseArticleDocumentSplitter implements DocumentSplitter {
         return i;
     }
 
+    /** 从 Document metadata 中提取来源文件名 */
     private static String extractFileName(Document doc) {
         try {
             String name = doc.metadata().getString("file_name");

@@ -4,6 +4,7 @@ import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
+import com.zxcSpringAI.exception.KnowledgeBaseException;
 import com.zxcSpringAI.splitter.ChineseArticleDocumentSplitter;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.embedding.Embedding;
@@ -27,15 +28,14 @@ import java.util.Set;
 /**
  * 文本类型文档处理策略
  *
- * <p>支持扩展：.txt .md .markdown .text .csv .log .json .xml .html .htm</p>
  * <p>流程：ChineseArticleDocumentSplitter 中文分片 → 计算 content_hash → 批次去重 → ES去重 → embedAll 批量向量化写入</p>
  */
 @Slf4j
 public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
 
-    /** 文本类型后缀 */
+    /** 适用类型 */
     public static final List<String> TEXT_EXTENSIONS = List.of(
-            "txt", "text", "md", "markdown", "csv", "log", "json", "xml", "html", "htm"
+            "txt", "text", "md", "markdown"
     );
 
     /** ES terms 查询单次最大条数（避免超出 ES terms_size 限制） */
@@ -53,34 +53,30 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
                        String sourceTag) {
         int docCount = documents.size();
 
-        log.info("[文档处理-{}][文本类型] 开始处理 {} 个文本类型文档", sourceTag, docCount);
+        log.info("[分片写入-{}][{}] 开始处理 {} 个文本类型文档", sourceTag, strategyName(), docCount);
 
-        // 文档样例预览
-        String sample = documents.get(0).text();
-        log.info("[文档处理-{}][文本类型] 文档[0]预览(前200字): {}",
-                sourceTag, sample.length() > 200 ? sample.substring(0, 200) + "..." : sample);
-
-        // 维度自测
+        // 模型维度测试
         try {
             int dim = embeddingModel.embed("维度自测").content().vector().length;
-            log.info("[文档处理-{}][文本类型] EmbeddingModel 输出向量维度: {}", sourceTag, dim);
+            log.info("[分片写入-{}][{}] EmbeddingModel 输出向量维度: {}", sourceTag, strategyName(), dim);
         } catch (Exception e) {
-            log.error("[文档处理-{}][文本类型] EmbeddingModel 自测失败: {}", sourceTag, e.getMessage());
+            log.error("[分片写入-{}][{}] EmbeddingModel 自测失败: {}", sourceTag, strategyName(), e.getMessage());
         }
 
-        // ===== 1. 分片 =====
+        // 1. 分片 
         ChineseArticleDocumentSplitter splitter = new ChineseArticleDocumentSplitter();
         List<TextSegment> allSegments = splitter.splitAll(documents);
-        log.info("[文档处理-{}][文本类型] 分片完成：{} 原始文档 → {} 个 TextSegment，" +
+        log.info("[分片写入-{}][{}] 分片完成：{} 个原始文档 → {} 个 TextSegment，" +
                         "最小字符 {}，最大字符 {}，平均字符 {}",
                 sourceTag,
+                strategyName(),
                 docCount,
                 allSegments.size(),
                 allSegments.stream().mapToInt(s -> s.text().length()).min().orElse(0),
                 allSegments.stream().mapToInt(s -> s.text().length()).max().orElse(0),
                 allSegments.stream().mapToInt(s -> s.text().length()).average().orElse(0d));
 
-        // ===== 2. 计算 content_hash =====
+        // 2. 根据内容生成文本段唯一 content_hash 
         for (TextSegment seg : allSegments) {
             String hash = computeContentHash(
                     seg.metadata().getString("file_name"),
@@ -90,7 +86,7 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
             seg.metadata().put("content_hash", hash);
         }
 
-        // ===== 3. 批次内去重 =====
+        // 3. 批次内去重 
         Map<String, TextSegment> uniqueSegments = new LinkedHashMap<>();
         for (TextSegment seg : allSegments) {
             String hash = seg.metadata().getString("content_hash");
@@ -98,11 +94,11 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
         }
         int batchDupCount = allSegments.size() - uniqueSegments.size();
         if (batchDupCount > 0) {
-            log.info("[文档处理-{}][文本类型] 批次内去重：{} 个片段中移除 {} 个重复，剩余 {} 个",
-                    sourceTag, allSegments.size(), batchDupCount, uniqueSegments.size());
+            log.info("[分片写入-{}][{}] 执行批次内去重：从 {} 个原始片段中移除 {} 个重复片段，剩余 {} 个文本段",
+                    sourceTag, strategyName(), allSegments.size(), batchDupCount, uniqueSegments.size());
         }
 
-        // ===== 4. ES 去重 =====
+        // 4. ES 去重 
         Set<String> existingHashes = queryExistingHashes(esClient, indexName, uniqueSegments.keySet());
         List<TextSegment> newSegments = new ArrayList<>();
         for (TextSegment seg : uniqueSegments.values()) {
@@ -113,21 +109,18 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
         }
         int esDupCount = uniqueSegments.size() - newSegments.size();
         if (esDupCount > 0) {
-            log.info("[文档处理-{}][文本类型] ES去重：发现 {} 个片段已存在，跳过写入", sourceTag, esDupCount);
+            log.info("[分片写入-{}][{}] 执行ES片段去重：发现 {} 个片段已存在，跳过写入", sourceTag, strategyName(), esDupCount);
         }
 
         if (newSegments.isEmpty()) {
-            log.info("[文档处理-{}][文本类型] 去重后无新增片段，跳过写入。", sourceTag);
+            log.info("[分片写入-{}][{}] 去重后无新增片段，跳过写入。", sourceTag, strategyName());
             return docCount;
         }
 
-        log.info("[文档处理-{}][文本类型] 去重后待写入 {} 个新片段（原始 {}，批次内重复 {}，ES已存在 {}）",
-                sourceTag, newSegments.size(), allSegments.size(), batchDupCount, esDupCount);
-
-        // ===== 5. 分批向量化 + 写入 =====
+        // 5. 分批向量化 + 写入 
         // text-embedding-v2 单次请求最大 25 行，超出会返回 400 InvalidParameter
-        log.info("[文档处理-{}][文本类型] 开始向量化写入（共 {} 个片段，每批 {} 个）...",
-                sourceTag, newSegments.size(), EMBEDDING_BATCH_SIZE);
+        log.info("[分片写入-{}][{}] 开始向量化写入（共 {} 个片段，每批 {} 个）...",
+                sourceTag, strategyName(), newSegments.size(), EMBEDDING_BATCH_SIZE);
         try {
             int total = newSegments.size();
             int written = 0;
@@ -141,11 +134,11 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
                     embeddingStore.add(embeddings.get(i), batch.get(i));
                 }
                 written += batch.size();
-                log.info("[文档处理-{}][文本类型] 向量化进度: {}/{}", sourceTag, written, total);
+                log.info("[分片写入-{}][{}] 向量化进度: {}/{}", sourceTag, strategyName(), written, total);
             }
-            log.info("[文档处理-{}][文本类型] 写入完成，新增 {} 个片段。", sourceTag, newSegments.size());
+            log.info("[分片写入-{}][{}] 写入完成，新增 {} 个片段。", sourceTag, strategyName(), newSegments.size());
         } catch (Exception e) {
-            log.error("[文档处理-{}][文本类型] 向量化写入失败: {}", sourceTag, e.getMessage(), e);
+            log.error("[分片写入-{}][{}] 向量化写入失败: {}", sourceTag, strategyName(), e.getMessage(), e);
         }
 
         return docCount;
@@ -175,7 +168,7 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
             byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (Exception e) {
-            return Integer.toHexString((fileName + "|" + sectionTitle + "|" + text).hashCode());
+            throw new KnowledgeBaseException("SHA-256 哈希计算失败，去重逻辑不可用: " + e.getMessage(), e);
         }
     }
 
@@ -228,8 +221,8 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
                     }
                 });
             } catch (Exception e) {
-                log.warn("[文档处理] 查询ES已有content_hash失败（索引可能不存在或无content_hash字段），"
-                        + "跳过ES去重: {}", e.getMessage());
+                log.warn("[分片去重-{}][{}] 查询ES已有content_hash失败（索引可能不存在或无content_hash字段），"
+                        + "跳过ES去重: {}", sourceTag, strategyName(), e.getMessage());
             }
         }
 
