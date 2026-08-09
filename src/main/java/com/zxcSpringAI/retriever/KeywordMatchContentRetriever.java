@@ -67,7 +67,12 @@ public class KeywordMatchContentRetriever implements ContentRetriever {
                     text = h.source().get("text").toString();
                 }
                 if (!text.isBlank()) {
-                    out.add(Content.from(TextSegment.from(text)));
+                    TextSegment segment = TextSegment.from(text);
+                    // 将 ES BM25 分数写入 metadata，供后续分数融合使用
+                    segment.metadata().put("_retrieval_score", h.score());
+                    // 将 ES 元数据字段传递给上层，供 boost 计算使用
+                    copyEsMetadata(h.source(), segment);
+                    out.add(Content.from(segment));
                 }
             });
 
@@ -78,6 +83,24 @@ public class KeywordMatchContentRetriever implements ContentRetriever {
         } catch (IOException e) {
             log.error("[ES关键词检索] 查询异常: {}", e.getMessage(), e);
             throw new KnowledgeBaseException("ES 关键词检索异常: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 从 ES source 中提取 file_name、section_title 等元数据写入 TextSegment metadata
+     */
+    @SuppressWarnings("unchecked")
+    private void copyEsMetadata(Map<String, Object> source, TextSegment segment) {
+        if (source == null) return;
+        Object metadataObj = source.get("metadata");
+        if (metadataObj instanceof Map) {
+            Map<String, Object> meta = (Map<String, Object>) metadataObj;
+            if (meta.get("file_name") != null) {
+                segment.metadata().put("file_name", meta.get("file_name").toString());
+            }
+            if (meta.get("section_title") != null) {
+                segment.metadata().put("section_title", meta.get("section_title").toString());
+            }
         }
     }
 }
