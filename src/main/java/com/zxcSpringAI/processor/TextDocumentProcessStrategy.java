@@ -221,8 +221,8 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
                     }
                 });
             } catch (Exception e) {
-                log.warn("[分片去重-{}][{}] 查询ES已有content_hash失败（索引可能不存在或无content_hash字段），"
-                        + "跳过ES去重: {}", sourceTag, strategyName(), e.getMessage());
+                log.warn("[分片去重-{}] 查询ES已有content_hash失败（索引可能不存在或无content_hash字段），"
+                        + "跳过ES去重: {}", strategyName(), e.getMessage());
             }
         }
 
