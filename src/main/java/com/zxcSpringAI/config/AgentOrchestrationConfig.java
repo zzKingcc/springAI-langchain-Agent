@@ -42,7 +42,7 @@ public class AgentOrchestrationConfig {
         }
 
         String systemMessage = promptProperties.getSystemMessage();
-        log.info("[Agent统一入口] 初始化完成，已注册 {} 个 @Tool，流式模型=qwen-plus，会话记忆=Redis持久化，系统提示词 {} 字符",
+        log.info("[Agent统一入口] 初始化完成，已注册 {} 个 @Tool，流式模型=qwen3.7-plus，会话记忆=Redis持久化，系统提示词 {} 字符",
                 toolCount, systemMessage != null ? systemMessage.length() : 0);
 
         return AiServices.builder(AgentOrchestrationService.class)
@@ -50,7 +50,6 @@ public class AgentOrchestrationConfig {
                 .chatMemoryProvider(chatMemoryProvider)
                 .systemMessageProvider(memoryId -> systemMessage)
                 .tools(tools)
-                .maxIterations(5)
                 .build();
     }
 }
