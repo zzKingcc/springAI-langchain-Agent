@@ -4,10 +4,7 @@ target/
 !**/src/test/**/target/
 
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -33,6 +30,12 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### 配置文件（含敏感信息，不上传）###
+application.yaml
+application.yml
+application-*.yaml
+application-*.yml
 
 ### Mac OS ###
 .DS_Store
