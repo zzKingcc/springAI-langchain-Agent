@@ -3,13 +3,15 @@ package com.zxcSpringAI.tools;
 import dev.langchain4j.agent.tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 /**
- * 天气查询工具
+ * Agent 工具集
  *
- * <p>提供喜羊羊公司所在地（广州）的天气相关查询方法，均为假逻辑数据，
- * 后续接入 Agent 时替换为真实天气 API。</p>
+ * <p>所有方法使用 {@code @Tool} 注解声明，由 Agent 编排服务根据用户意图自动调用。
+ * 以 Spring Bean 形式注册，可注入其他组件（如 RedisTemplate、Service 等）。</p>
  */
+@Component
 public class Tools {
 
     private static final Logger log = LoggerFactory.getLogger(Tools.class);

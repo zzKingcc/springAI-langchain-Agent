@@ -45,15 +45,14 @@ public class TestController {
     }
 
     /**
-     * Agent 编排入口（同步返回）
+     * Agent 编排入口（同步返回，无会话记忆）
      *
-     * @param sessionId 会话 ID
      * @param message 用户指令
-     * @return 编排结果
+     * @return 编排结果（模型自主选择 @Tool 工具并整合结果）
      */
-    @GetMapping(value = "/agent/{sessionId}/{message}", produces = "text/html;charset=UTF-8")
-    public String agent(@PathVariable String sessionId, @PathVariable String message) {
-        log.info("[Agent编排] 会话[{}] 收到指令：{}", sessionId, message);
-        return agentOrchestrationService.orchestrate(sessionId, message);
+    @GetMapping(value = "/agent/{message}", produces = "text/html;charset=UTF-8")
+    public String agent(@PathVariable String message) {
+        log.info("[Agent编排] 收到指令：{}", message);
+        return agentOrchestrationService.orchestrate(message);
     }
 }
