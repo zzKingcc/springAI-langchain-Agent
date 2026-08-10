@@ -16,12 +16,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 关键词精准匹配检索器（BM25）
- *
- * <p>对 ES 的 {@code text} 字段执行 match 查询，利用 IK 分词器进行中文分词后做 BM25 相关性打分。
- * 适用于精确术语、型号编号、阈值参数等向量检索容易漏召回的场景。</p>
- *
- * <p>检索字段：text（IK 分词后的全文匹配）+ section_title（章节标题加权匹配）</p>
+ * 关键词精准匹配检索器
  */
 public class KeywordMatchContentRetriever implements ContentRetriever {
 

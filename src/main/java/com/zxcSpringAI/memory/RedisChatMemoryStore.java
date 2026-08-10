@@ -15,25 +15,6 @@ import java.util.List;
 
 /**
  * 基于 Redis 的会话记忆持久化存储
- *
- * <p>实现 LangChain4j {@link ChatMemoryStore} 接口，将多轮对话消息持久化到 Redis，
- * 支持多会话隔离、自动过期、重启不丢失。</p>
- *
- * <h3>Redis Key 设计</h3>
- * <pre>
- *   chat:memory:{sessionId}
- *     ├── 类型：String
- *     ├── Value：ChatMessageSerializer.messagesToJson() 序列化的 JSON 字符串
- *     └── TTL：永久（后期根据业务需要改为有限时长，如 30 分钟）
- * </pre>
- *
- * <h3>序列化方式</h3>
- * <p>使用 langchain4j 原生的 {@link ChatMessageSerializer} / {@link ChatMessageDeserializer}
- * 进行消息序列化，避免 Jackson 对 langchain4j 消息类（如 SystemMessage）反序列化时的构造器缺失问题。</p>
- *
- * <h3>多会话隔离</h3>
- * <p>每个 sessionId 对应独立的 Redis Key，不同用户/会话互不干扰。
- * 配合 {@code @MemoryId} 注解实现按会话路由。</p>
  */
 public class RedisChatMemoryStore implements ChatMemoryStore {
 
@@ -42,7 +23,7 @@ public class RedisChatMemoryStore implements ChatMemoryStore {
     /** Key 前缀 */
     private static final String KEY_PREFIX = "chat:memory:";
 
-    /** 会话记忆过期时间：null 表示永久不过期（后期根据业务需要再改为有限时长） */
+    /** 会话记忆过期时间：null 表示永久不过期 */
     private static final Duration TTL = null;
 
     private final StringRedisTemplate redisTemplate;

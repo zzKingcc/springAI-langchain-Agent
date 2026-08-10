@@ -15,23 +15,8 @@ import java.util.List;
 
 /**
  * 双约束会话记忆
- *
- * <p>同时限制消息条数和 Token 数，满足任一约束即从最旧消息开始淘汰：</p>
- * <ul>
- *   <li>消息条数上限：{@code maxMessages}（默认 50 条）</li>
- *   <li>Token 估算上限：{@code maxTokens}（默认 30000）</li>
- * </ul>
- *
- * <p>淘汰策略：从队列头部（最旧的消息）逐条移除，直到两个约束都满足为止。
- * 至少保留最新 1 条消息，避免空记忆。</p>
- *
- * <h3>Token 估算方式</h3>
- * <p>不依赖外部 Tokenizer，使用字符级启发式估算：</p>
- * <ul>
- *   <li>CJK 字符（中文、日文、韩文、全角符号）：1.5 token/字符</li>
- *   <li>其他字符（ASCII、半角符号）：0.25 token/字符（约 4 字符/token）</li>
- * </ul>
- * <p>该估算对中英混排文本有较好的近似精度，足以用于记忆窗口管理。</p>
+ * 1、消息条数，上线50伦
+ * 2、Token 数，30k
  */
 public class DualConstraintChatMemory implements ChatMemory {
 
@@ -94,7 +79,6 @@ public class DualConstraintChatMemory implements ChatMemory {
         store.deleteMessages(id);
     }
 
-    // ==================== Token 估算 ====================
 
     /**
      * 估算消息列表的总 Token 数

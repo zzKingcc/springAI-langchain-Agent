@@ -7,7 +7,6 @@ import dev.langchain4j.store.embedding.EmbeddingStore;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * 未知/未识别文件类型处理策略

@@ -27,8 +27,6 @@ import java.util.Set;
 
 /**
  * 文本类型文档处理策略
- *
- * <p>流程：ChineseArticleDocumentSplitter 中文分片 → 计算 content_hash → 批次去重 → ES去重 → embedAll 批量向量化写入</p>
  */
 @Slf4j
 public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
@@ -154,7 +152,6 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
         return "文本类型";
     }
 
-    // ==================== 去重辅助 ====================
 
     /**
      * 计算 content_hash：SHA-256(file_name + section_title + text)
@@ -229,7 +226,6 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
         return existing;
     }
 
-    // ==================== 公开辅助 ====================
 
     /**
      * 判断给定扩展名是否为文本类型（工厂调用用）

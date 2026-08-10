@@ -9,18 +9,6 @@ import java.util.regex.Pattern;
 
 /**
  * 用户输入安全检测与过滤工具
- *
- * <p>防止提示词注入攻击，对用户输入进行多层检测和清洗。
- * 纯静态工具类，不依赖 Spring 容器，可在任意位置直接调用。</p>
- *
- * <h3>检测维度</h3>
- * <ul>
- *   <li>指令覆盖：试图绕过或覆盖系统提示词</li>
- *   <li>角色混淆：冒充 system/assistant 角色</li>
- *   <li>分隔符注入：用特殊字符破坏消息结构</li>
- *   <li>系统提示词窃取：试图让模型输出内部指令</li>
- *   <li>长度异常：超长输入可能携带隐藏 payload</li>
- * </ul>
  */
 public final class InputSanitizer {
 
@@ -29,8 +17,7 @@ public final class InputSanitizer {
     /** 用户输入最大长度（字符） */
     private static final int MAX_INPUT_LENGTH = 2000;
 
-    // ==================== 指令覆盖检测 ====================
-
+    //1、指令覆盖检测
     private static final Pattern[] INSTRUCTION_OVERRIDE = {
             Pattern.compile("忽略.{0,10}(上[面文]|之前|此前|以上).{0,10}(指令|规则|提示|要求|约束|限制|对话|内容|说明)"),
             Pattern.compile("(忘记|抛弃|无视|清除|删除|重置).{0,10}(之前|上[面文]|此前|以上).{0,10}(指令|规则|记忆|对话|上下文|历史)"),
@@ -43,8 +30,7 @@ public final class InputSanitizer {
             Pattern.compile("override.{0,10}(system|instruction|prompt|rule)"),
     };
 
-    // ==================== 角色混淆检测 ====================
-
+    //2、角色混淆检测
     private static final Pattern[] ROLE_CONFUSION = {
             Pattern.compile("(?i)^\\s*(system|assistant|user|function|tool)\\s*[:：]"),
             Pattern.compile("(?i)\\[system\\]|\\[assistant\\]|\\[user\\]"),
@@ -54,16 +40,14 @@ public final class InputSanitizer {
             Pattern.compile("you are.{0,5}(system|AI|model|GPT|LLM)"),
     };
 
-    // ==================== 分隔符注入检测 ====================
-
+    //3、分隔符注入检测
     private static final Pattern[] DELIMITER_INJECTION = {
             Pattern.compile("(---|===|___|\\*\\*\\*|###)\\s*(system|instruction|命令|指令|规则|提示)"),
             Pattern.compile("(system|instruction|命令|指令|规则|提示)\\s*(---|===|___|\\*\\*\\*|###)"),
             Pattern.compile("(?m)^\\s*#{1,3}\\s*(system|指令|规则|提示|命令)"),
     };
 
-    // ==================== 系统提示词窃取检测 ====================
-
+    //4、系统提示词窃取检测
     private static final Pattern[] PROMPT_EXTRACTION = {
             Pattern.compile("(输出|打印|显示|重复|复述|告诉我|说出|透露|泄露|展示).{0,15}(系统提示词|system.{0,5}prompt|系统指令|你的指令|你的规则|你的设定|你的角色|你的人设)"),
             Pattern.compile("(repeat|print|output|show|display|tell|reveal|leak|dump).{0,15}(system.{0,5}prompt|instruction|your.{0,5}rule|your.{0,5}setting|your.{0,5}role)"),
@@ -73,20 +57,16 @@ public final class InputSanitizer {
             Pattern.compile("(翻译|转换|编码).{0,10}(提示词|prompt|指令)"),
     };
 
-    // ==================== 编码绕过检测 ====================
-
+    //5、编码绕过检测
     private static final Pattern[] ENCODING_BYPASS = {
             Pattern.compile("(base64|unicode|hex|url.{0,5}encode|utf.{0,5}encode).{0,20}(decode|解码|解析)"),
             Pattern.compile("用.{0,5}(base64|unicode|编码).{0,10}(输出|翻译|回复|回答)"),
     };
 
-    private InputSanitizer() {
-        // 工具类，禁止实例化
-    }
+    private InputSanitizer() {}
 
     /**
      * 检测用户输入是否包含注入攻击特征
-     *
      * @param input 用户输入
      * @return 命中检测规则时必须 reject
      */
@@ -130,11 +110,7 @@ public final class InputSanitizer {
     }
 
     /**
-     * 安全清洗用户输入
-     *
-     * <p>对输入做非破坏性处理：去首尾空白、截断超长、统一换行，
-     * 不改变合法输入的语义。</p>
-     *
+     * 清洗用户输入
      * @param input 原始用户输入
      * @return 清洗后的安全文本
      */
@@ -160,9 +136,6 @@ public final class InputSanitizer {
 
     /**
      * 检测 + 清洗一步完成
-     *
-     * <p>推荐在 Controller 层调用此方法作为统一的输入校验入口。</p>
-     *
      * @param input 原始用户输入
      * @return 清洗后的安全文本
      * @throws IllegalArgumentException 如果检测到注入攻击
@@ -175,7 +148,7 @@ public final class InputSanitizer {
     }
 
     /**
-     * 检测命中规则列表（诊断用，返回所有命中的规则描述）
+     * 检测命中规则列表，返回所有命中的规则描述
      */
     public static List<String> detectDetails(String input) {
         List<String> hits = new ArrayList<>();

@@ -9,14 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
-/**
- * 统一 Agent 对话接口
- *
- * <p>融合 RAG 知识库检索 + Tool 工具调用 + 会话记忆，作为唯一的用户对话入口。
- * 流式输出，模型自主编排检索与工具调用顺序后逐块返回最终回答。</p>
- *
- * <p>会话记忆通过 {@code sessionId} 隔离，Redis 持久化，支持多轮对话。</p>
- */
 @RestController
 @RequestMapping("/test")
 public class TestController {
@@ -30,14 +22,11 @@ public class TestController {
     }
 
     /**
-     * 统一 Agent 对话入口（流式输出）
+     * Agent 对话入口
      *
-     * <p>Tool 调用循环期间不产生 token 流，模型完成所有工具调用后，
-     * 最终整合回答逐块流式返回。</p>
-     *
-     * @param sessionId 会话 ID，用于多轮对话记忆隔离
-     * @param message   用户问题
-     * @return 流式编排结果（模型自主选择 @Tool 工具并整合结果）
+     * @param sessionId
+     * @param message
+     * @return 流式编排结果，模型自主选择工具并整合结果
      */
     @GetMapping(value = "/agent/{sessionId}/{message}", produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8")
     public Flux<String> agent(@PathVariable String sessionId, @PathVariable String message) {

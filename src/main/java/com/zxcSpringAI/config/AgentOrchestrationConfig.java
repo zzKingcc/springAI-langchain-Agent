@@ -17,9 +17,6 @@ import java.lang.reflect.Method;
 
 /**
  * 统一 Agent 对话配置
- *
- * <p>构建融合 RAG + Tool + 会话记忆的 Agent 对话服务。
- * 系统提示词从 application.yaml（ai.prompt.system-message）读取，修改后重启生效。</p>
  */
 @Configuration
 @EnableConfigurationProperties(AiPromptProperties.class)

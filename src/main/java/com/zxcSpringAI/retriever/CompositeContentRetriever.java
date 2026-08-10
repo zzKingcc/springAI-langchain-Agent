@@ -18,22 +18,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 组合检索器（向量检索 + 关键词检索 + 分数融合重排序）
- *
- * <p>流程：</p>
- * <ol>
- *   <li>向量检索 Top15（余弦相似度）</li>
- *   <li>关键词检索 Top5（BM25 multi_match）</li>
- *   <li>合并去重：按文本 SHA-256，相同文本只保留一份（向量结果优先）</li>
- *   <li>分数融合：向量分数和关键词分数分别 min-max 归一化后加权求和</li>
- *   <li>Boost 加成：标题命中 +0.15，文件名命中 +0.1</li>
- *   <li>按融合分数降序排序，取 Top10</li>
- * </ol>
- *
- * <p>分数融合公式：<br>
- * {@code finalScore = 0.6 * normCosScore + 0.4 * normBm25Score + titleBoost + fileNameBoost}</p>
- *
- * <p>任一路检索异常不中断另一路，保证可用性。</p>
+ * 组合检索器
+ * 1、向量检索
+ * 2、关键词检索
+ * 3、分数融合重排序）
  */
 public class CompositeContentRetriever implements ContentRetriever {
 
@@ -81,7 +69,7 @@ public class CompositeContentRetriever implements ContentRetriever {
             log.warn("[组合检索] 关键词检索异常，仅使用向量结果: {}", e.getMessage());
         }
 
-        // ===== 合并去重 + 记录分数来源 =====
+        // 合并去重 + 记录分数来源
         Map<String, ScoreEntry> scoreMap = new LinkedHashMap<>();
         String queryText = query.text();
 
@@ -106,7 +94,7 @@ public class CompositeContentRetriever implements ContentRetriever {
             }
         }
 
-        // ===== 分数融合 =====
+        // 分数融合
         if (scoreMap.isEmpty()) {
             return new ArrayList<>();
         }
@@ -130,7 +118,6 @@ public class CompositeContentRetriever implements ContentRetriever {
         return result;
     }
 
-    // ==================== 分数融合 ====================
 
     /**
      * 对向量分数和关键词分数分别做 min-max 归一化
@@ -228,8 +215,7 @@ public class CompositeContentRetriever implements ContentRetriever {
         return Set.of(query.toLowerCase().split("[\\s，。！？、；：\"'（）《》\\[\\]【】,.!?;:()]+"));
     }
 
-    // ==================== 去重辅助 ====================
-
+    //去重辅助
     private String hashContent(Content content) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -240,8 +226,7 @@ public class CompositeContentRetriever implements ContentRetriever {
         }
     }
 
-    // ==================== 内部数据结构 ====================
-
+    //内部数据结构
     /**
      * 单条检索结果的分数记录，用于融合计算
      */

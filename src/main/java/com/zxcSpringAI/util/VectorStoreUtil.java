@@ -21,9 +21,7 @@ public class VectorStoreUtil {
 
     private VectorStoreUtil() {}
 
-    /**
-     * 启动诊断：输出 ES 版本、集群健康、索引存在性及字段结构
-     */
+    /** 启动诊断：输出 ES 版本、集群健康、索引存在性及字段结构 */
     public static void diagnoseElasticsearch(ElasticsearchClient esClient, String indexName) {
         try {
             var info = esClient.info();
@@ -68,9 +66,7 @@ public class VectorStoreUtil {
         }
     }
 
-    /**
-     * 按需删除旧索引
-     */
+    /** 按需删除旧索引 */
     public static void deleteIndexIfNeeded(ElasticsearchClient esClient, String indexName, boolean deleteOnStartup) {
         if (!deleteOnStartup) return;
         try {
@@ -83,21 +79,10 @@ public class VectorStoreUtil {
     }
 
     /**
-     * 创建带 IK 分词器的索引 mapping（供混合检索使用）。
-     *
-     * <p>字段设计：</p>
-     * <ul>
-     *   <li>{@code vector}：dense_vector，dims=1536，用于向量余弦相似度检索</li>
-     *   <li>{@code text}：text，写入用 ik_max_word 最大粒度分词，检索用 ik_smart 智能分词；
-     *       附带 .keyword 子字段用于精确匹配/聚合</li>
-     *   <li>{@code metadata}：object，存储 file_name / section_title / content_hash 等元数据</li>
-     * </ul>
-     *
-     * <p>如果 ES 未安装 IK 插件，创建会失败，此时降级为让 LangChain4j 自动创建默认索引。</p>
-     *
+     * 创建带 IK 分词器的索引 mapping。
      * @param esClient  ES 客户端
      * @param indexName 索引名
-     * @param dims      向量维度（与 EmbeddingModel 输出一致，如 1536）
+     * @param dims      向量维度
      */
     public static void createIndexWithIkMapping(ElasticsearchClient esClient, String indexName, int dims) {
         try {
@@ -152,9 +137,7 @@ public class VectorStoreUtil {
         }
     }
 
-    /**
-     * 写入后校验：刷新索引，输出文档数 / 字段 mapping / 样例文档 / script_score 示例查询结果
-     */
+    /** 写入后校验：刷新索引，输出查询结果 */
     public static void writeAfterVerify(ElasticsearchClient esClient, String indexName) {
         try {
             esClient.indices().refresh(r -> r.index(indexName));
@@ -283,9 +266,7 @@ public class VectorStoreUtil {
         return out;
     }
 
-    /**
-     * 将 ES Property 转为可读的字段类型名称
-     */
+    /** 将 ES Property 转为可读的字段类型名称 */
     private static String propertyTypeName(Property p) {
         if (p == null) return "null";
         if (p.isText()) return "text";

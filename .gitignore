@@ -34,6 +34,7 @@ build/
 ### Mac OS ###
 .DS_Store
 
-###  txt  ###
-/src/main/resources/ragDatabase/
+###  doc + mypropertise  ###
+/src/main/resources/doc/
+/src/main/resources/myPropertise/
 

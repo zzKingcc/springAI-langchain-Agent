@@ -14,21 +14,17 @@ import java.util.Map;
 
 /**
  * 知识库文档导入工具（策略模式调度层）
- *
- * 提供两个入口：
- *      本地导入
- *      todo 远程导入
+ * 1、本地导入
+ * 2、todo 远程导入
  */
 @Slf4j
 public class DocumentIngestor {
 
-    private DocumentIngestor() {
-    }
+    private DocumentIngestor() {}
 
-    // ==================== 入口 ====================
 
     /**
-     * 从本地 classpath:ragDatabase 加载知识库文档并执行向量化写入。
+     * 从本地加载知识库文档并执行向量化写入。
      *
      * @param esClient       
      * @param indexName     
@@ -52,27 +48,8 @@ public class DocumentIngestor {
         return doIngest(documents, esClient, indexName, embeddingStore, embeddingModel, "本地");
     }
 
-    /**
-     * 接收外部传入的文档列表并执行向量化写入。
-     *
-     * @param documents      
-     * @param esClient       
-     * @param indexName     
-     * @param embeddingStore 
-     * @param embeddingModel 
-     * @return 
-     */
-    public static int ingestExternalDocuments(List<Document> documents,
-                                              ElasticsearchClient esClient,
-                                              String indexName,
-                                              EmbeddingStore embeddingStore,
-                                              EmbeddingModel embeddingModel) {
-        // TODO: 外部文档导入的具体实现
-        log.warn("[知识库导入-外部] 外部文档导入功能尚未实现，当前调用将被忽略。");
-        return 0;
-    }
 
-    // ==================== 策略分发 ====================
+
 
     /**
      * 策略分发
@@ -130,4 +107,25 @@ public class DocumentIngestor {
         log.info("[知识库导入-{}] 全部分组处理结束，总处理文档数：{}", sourceTag, totalProcessed);
         return totalProcessed;
     }
+
+
+    /**
+     * TODO: 外部文档导入的具体实现
+     *
+     * @param documents
+     * @param esClient
+     * @param indexName
+     * @param embeddingStore
+     * @param embeddingModel
+     * @return
+     */
+    public static int ingestExternalDocuments(List<Document> documents,
+                                              ElasticsearchClient esClient,
+                                              String indexName,
+                                              EmbeddingStore embeddingStore,
+                                              EmbeddingModel embeddingModel) {
+        log.warn("[知识库导入-外部] 外部文档导入功能尚未实现，当前调用将被忽略。");
+        return 0;
+    }
+
 }

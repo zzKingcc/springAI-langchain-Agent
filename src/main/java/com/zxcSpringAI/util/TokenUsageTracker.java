@@ -4,31 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Token 用量统计工具（ThreadLocal）
- *
- * <p>在一次 Agent 请求的完整生命周期中，统计 LLM 推理和 Tool 调用的 Token 消耗。
- * 请求入口调用 {@link #begin()} 初始化，结束时调用 {@link #finishAndLog()} 打印统计并清除。</p>
- *
- * <h3>使用方式</h3>
- * <pre>
- *   // Controller 层
- *   TokenUsageTracker.begin();
- *   try {
- *       // 流式输出中逐 chunk 记录 output token
- *       TokenUsageTracker.recordLlmOutputChunk(chunk);
- *       // Tool 调用中记录
- *       TokenUsageTracker.recordToolCall("searchKnowledgeBase", keyword, result);
- *   } finally {
- *       TokenUsageTracker.finishAndLog();
- *   }
- * </pre>
- *
- * <h3>Token 估算方式</h3>
- * <p>使用字符级启发式估算（与 DualConstraintChatMemory 一致）：</p>
- * <ul>
- *   <li>CJK 字符：1.5 token/字符</li>
- *   <li>ASCII 字符：0.25 token/字符</li>
- * </ul>
+ * Token 用量统计工具
  */
 public final class TokenUsageTracker {
 
@@ -36,9 +12,7 @@ public final class TokenUsageTracker {
 
     private static final ThreadLocal<TokenStats> STATS = ThreadLocal.withInitial(TokenStats::new);
 
-    private TokenUsageTracker() {
-        // 工具类，禁止实例化
-    }
+    private TokenUsageTracker() {}
 
     /** 开始新一轮统计（清除上一轮残留） */
     public static void begin() {
@@ -72,8 +46,7 @@ public final class TokenUsageTracker {
         STATS.remove();
     }
 
-    // ==================== Token 估算（与 DualConstraintChatMemory 一致） ====================
-
+    //1、Token 估算
     private static int estimateTokens(String text) {
         if (text == null || text.isEmpty()) {
             return 0;

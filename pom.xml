@@ -12,14 +12,13 @@
     </parent>
 
     <groupId>com.zxc</groupId>
-    <artifactId>springAI-rag</artifactId>
+    <artifactId>springAI-Langchain-Agent</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
         <spring.boot.version>3.5.7</spring.boot.version>
         <langchain4j.version>1.18.1</langchain4j.version>
         <elasticsearch.version>9.4.4</elasticsearch.version>
@@ -79,12 +78,12 @@
         <dependency>
             <groupId>co.elastic.clients</groupId>
             <artifactId>elasticsearch-java</artifactId>
-            <version>9.4.4</version>
+            <version>${elasticsearch.version}</version>
         </dependency>
         <dependency>
             <groupId>org.elasticsearch.client</groupId>
             <artifactId>elasticsearch-rest-client</artifactId>
-            <version>9.4.4</version>
+            <version>${elasticsearch.version}</version>
         </dependency>
 
         <!--    引入lombok依赖    -->
@@ -99,9 +98,5 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-
     </dependencies>
-
-
-
 </project>

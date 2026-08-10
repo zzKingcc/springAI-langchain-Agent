@@ -17,30 +17,13 @@ import java.util.concurrent.TimeoutException;
 
 /**
  * 全局异常处理器
- *
- * <p>统一拦截 Controller 层抛出的异常，返回结构化 JSON 错误响应，避免堆栈泄露。</p>
- *
- * <h3>异常处理优先级（从具体到宽泛）</h3>
- * <ol>
- *   <li>{@link KnowledgeBaseException} → 500，知识库业务异常</li>
- *   <li>{@link ChatMemoryException} → 500，会话记忆异常</li>
- *   <li>{@link BaseException} → 自定义 code，业务异常基类</li>
- *   <li>{@link IllegalArgumentException} → 400，参数校验异常</li>
- *   <li>{@link MissingPathVariableException} → 400，路径参数缺失</li>
- *   <li>{@link MethodArgumentTypeMismatchException} → 400，参数类型不匹配</li>
- *   <li>{@link SocketTimeoutException} → 504，LLM 调用超时</li>
- *   <li>{@link TimeoutException} → 504，LLM 调用超时</li>
- *   <li>{@link NoResourceFoundException} → 404，静态资源未找到（favicon.ico 等静默处理）</li>
- *   <li>{@link RuntimeException} → 500，未预期的运行时异常</li>
- *   <li>{@link Exception} → 500，兜底</li>
- * </ol>
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // ==================== 业务异常 ====================
+    // 业务异常
 
     @ExceptionHandler(KnowledgeBaseException.class)
     public ResponseEntity<Map<String, Object>> handleKnowledgeBaseException(KnowledgeBaseException e) {
@@ -60,7 +43,7 @@ public class GlobalExceptionHandler {
         return buildResponse(e.getCode(), "业务异常", e.getMessage());
     }
 
-    // ==================== 参数校验异常 ====================
+    // 参数校验异常
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgumentException(IllegalArgumentException e) {
@@ -81,23 +64,23 @@ public class GlobalExceptionHandler {
                 "参数 " + e.getName() + " 期望类型：" + e.getRequiredType().getSimpleName());
     }
 
-    // ==================== LLM 超时异常 ====================
+    // LLM 超时异常
 
-    /** LLM API 调用超时（Socket 读取超时） */
+    /** LLM API 读取超时 */
     @ExceptionHandler(SocketTimeoutException.class)
     public ResponseEntity<Map<String, Object>> handleSocketTimeoutException(SocketTimeoutException e) {
         log.error("[全局异常] LLM调用超时(Socket): {}", e.getMessage());
         return buildResponse(504, "LLM服务超时", "大模型接口响应超时，请稍后重试");
     }
 
-    /** LLM API 调用超时（连接/请求超时） */
+    /** LLM API 连接超时 */
     @ExceptionHandler(TimeoutException.class)
     public ResponseEntity<Map<String, Object>> handleTimeoutException(TimeoutException e) {
         log.error("[全局异常] LLM调用超时(Timeout): {}", e.getMessage());
         return buildResponse(504, "LLM服务超时", "大模型接口响应超时，请稍后重试");
     }
 
-    // ==================== 静态资源异常 ====================
+    // 静态资源异常
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNoResourceFoundException(NoResourceFoundException e) {
@@ -110,7 +93,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND.value(), "资源未找到", "请求的资源不存在：" + resourcePath);
     }
 
-    // ==================== 运行时异常 ====================
+    // 运行时异常
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException e) {
@@ -118,7 +101,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), "服务内部错误", "服务暂时不可用，请稍后重试");
     }
 
-    // ==================== 兜底 ====================
+    // 兜底
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleException(Exception e) {
@@ -126,7 +109,6 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR.value(), "服务内部错误", "服务暂时不可用，请稍后重试");
     }
 
-    // ==================== 工具方法 ====================
 
     /**
      * 构建统一 JSON 响应体

@@ -26,9 +26,6 @@ public class AiConfig {
 
     /**
      * 组合检索器（向量检索 Top15 + 关键词检索 Top5）
-     *
-     * <p>向量检索负责语义泛化召回，关键词检索负责精确术语/型号/编号命中，两路结果合并去重后返回。
-     * 任一路检索异常不中断另一路，保证可用性。</p>
      */
     @Bean
     public ContentRetriever myContentRetriever(

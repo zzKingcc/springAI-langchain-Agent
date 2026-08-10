@@ -14,15 +14,6 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
  * Redis 配置类
- *
- * <p>统一配置 RedisTemplate 的序列化策略：</p>
- * <ul>
- *   <li>Key：StringRedisSerializer（可读字符串）</li>
- *   <li>Value：GenericJackson2JsonRedisSerializer（JSON 序列化，保留类型信息）</li>
- *   <li>HashKey / HashValue：同上</li>
- * </ul>
- *
- * <p>后续会话记忆持久化（ChatMemoryStore）、去重缓存等均基于此 RedisTemplate。</p>
  */
 @Configuration
 public class RedisConfig {

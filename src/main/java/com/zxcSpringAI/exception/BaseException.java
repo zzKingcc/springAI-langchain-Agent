@@ -2,8 +2,6 @@ package com.zxcSpringAI.exception;
 
 /**
  * 全局异常体系基类
- *
- * <p>所有业务自定义异常继承此类，全局异常处理器统一捕获。</p>
  */
 public class BaseException extends RuntimeException {
 
