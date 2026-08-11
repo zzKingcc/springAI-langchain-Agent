@@ -20,7 +20,8 @@ public class DocumentProcessStrategyFactory {
     /** 已注册策略实例 */
     private static final List<DocumentProcessStrategy> ALL_STRATEGIES = List.of(
             new TextDocumentProcessStrategy(),    // .txt .md .markdown .text
-            new PdfDocumentProcessStrategy()      // .pdf
+            new PdfDocumentProcessStrategy(),      // .pdf
+            new UnknownDocumentProcessStrategy()      // 未知文件类型
     );
 
     /** 扩展名 → 策略 的映射缓存 */
@@ -45,15 +46,14 @@ public class DocumentProcessStrategyFactory {
      * 根据文件名取扩展名匹配策略。
      */
     public static DocumentProcessStrategy resolve(String fileName) {
+        //扩展名提取
         String ext = extractExtension(fileName);
         if (ext == null) {
-            // 无后缀：默认 unknown
-            return ALL_STRATEGIES.stream()
-                    .filter(s -> s instanceof UnknownDocumentProcessStrategy)
-                    .findFirst()
-                    .orElseThrow(() -> new KnowledgeBaseException("[策略工厂] 未注册 UnknownDocumentProcessStrategy"));
+            // 超出扩展名边界，使用 unknown 策略
+            return UnknownDocumentProcessStrategy.INSTANCE;
         }
         DocumentProcessStrategy s = EXT_TO_STRATEGY.get(ext.toLowerCase(Locale.ROOT));
+        //当有效扩展名未适配策略时，使用 unknown 策略
         if (s != null) return s;
         return UnknownDocumentProcessStrategy.INSTANCE;
     }
@@ -66,16 +66,15 @@ public class DocumentProcessStrategyFactory {
      */
     public static Map<DocumentProcessStrategy, List<Document>> groupByStrategy(List<Document> documents) {
         Map<DocumentProcessStrategy, List<Document>> group = new LinkedHashMap<>();
-        // 初始化分组容器：按 ALL_STRATEGIES 注册顺序创建空列表，最后加 UNKNOWN
         for (DocumentProcessStrategy s : ALL_STRATEGIES) {
             group.put(s, new ArrayList<>());
         }
-        group.put(UnknownDocumentProcessStrategy.INSTANCE, new ArrayList<>());
 
         for (Document doc : documents) {
             String name = extractFileName(doc);
             DocumentProcessStrategy strategy = resolve(name);
-            group.computeIfAbsent(strategy, k -> new ArrayList<>()).add(doc);
+            // group.computeIfAbsent(strategy, k -> new ArrayList<>()).add(doc);
+            group.get(strategy).add(doc);
         }
 
         // 移除空组，减少上层循环输出
@@ -90,8 +89,8 @@ public class DocumentProcessStrategyFactory {
         return ALL_STRATEGIES;
     }
 
-    // ==================== 辅助 ====================
 
+    //扩展名提取
     private static String extractExtension(String fileName) {
         if (fileName == null || fileName.isBlank()) return null;
         int dot = fileName.lastIndexOf('.');
@@ -99,27 +98,26 @@ public class DocumentProcessStrategyFactory {
         return fileName.substring(dot + 1);
     }
 
+    //三级文件名提取
     private static String extractFileName(Document doc) {
         try {
+            //1、文件名
             String name = doc.metadata().getString("file_name");
             if (name != null && !name.isBlank()) return name;
-        } catch (Exception ignored) {
-        }
-        try {
+            //2、来源路径截取
             String src = doc.metadata().getString("source");
             if (src != null && !src.isBlank()) {
                 int sep = Math.max(src.lastIndexOf('/'), src.lastIndexOf('\\'));
                 return sep >= 0 ? src.substring(sep + 1) : src;
             }
-        } catch (Exception ignored) {
-        }
-        try {
+            //3、绝对路径截取
             String abs = doc.metadata().getString("absolute_path");
             if (abs != null && !abs.isBlank()) {
                 int sep = Math.max(abs.lastIndexOf('/'), abs.lastIndexOf('\\'));
                 return sep >= 0 ? abs.substring(sep + 1) : abs;
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            log.error("提取文件名时出错", e);
         }
         return "(unknown)";
     }
