@@ -42,9 +42,24 @@ public class PdfDocumentProcessStrategy implements DocumentProcessStrategy {
 
     private String safeFileName(Document doc) {
         try {
-            return doc.metadata().getString("file_name");
+            //1、文件名
+            String name = doc.metadata().getString("file_name");
+            if (name != null && !name.isBlank()) return name;
+            //2、来源路径截取
+            String src = doc.metadata().getString("source");
+            if (src != null && !src.isBlank()) {
+                int sep = Math.max(src.lastIndexOf('/'), src.lastIndexOf('\\'));
+                return sep >= 0 ? src.substring(sep + 1) : src;
+            }
+            //3、绝对路径截取
+            String abs = doc.metadata().getString("absolute_path");
+            if (abs != null && !abs.isBlank()) {
+                int sep = Math.max(abs.lastIndexOf('/'), abs.lastIndexOf('\\'));
+                return sep >= 0 ? abs.substring(sep + 1) : abs;
+            }
         } catch (Exception e) {
-            return "(unknown)";
+            log.error("提取文件名时出错", e);
         }
+        return "(unknown)";
     }
 }
