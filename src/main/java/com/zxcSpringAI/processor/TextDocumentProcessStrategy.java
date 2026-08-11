@@ -36,10 +36,10 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
             "txt", "text", "md", "markdown"
     );
 
-    /** ES terms 查询单次最大条数（避免超出 ES terms_size 限制） */
+    /** ES terms 查询单次最大条数限制 */
     private static final int ES_TERMS_BATCH_SIZE = 10000;
 
-    /** 百炼 text-embedding-v2 单次请求最大行数（超出返回 400 InvalidParameter） */
+    /** 百炼 text-embedding-v2 模型限制的单次请求最大行数 */
     private static final int EMBEDDING_BATCH_SIZE = 25;
 
     @Override
@@ -53,14 +53,6 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
 
         log.info("[分片写入-{}][{}] 开始处理 {} 个文本类型文档", sourceTag, strategyName(), docCount);
 
-        // 模型维度测试
-        try {
-            int dim = embeddingModel.embed("维度自测").content().vector().length;
-            log.info("[分片写入-{}][{}] EmbeddingModel 输出向量维度: {}", sourceTag, strategyName(), dim);
-        } catch (Exception e) {
-            log.error("[分片写入-{}][{}] EmbeddingModel 自测失败: {}", sourceTag, strategyName(), e.getMessage());
-        }
-
         // 1. 分片 
         ChineseArticleDocumentSplitter splitter = new ChineseArticleDocumentSplitter();
         List<TextSegment> allSegments = splitter.splitAll(documents);
@@ -72,7 +64,8 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
                 allSegments.size(),
                 allSegments.stream().mapToInt(s -> s.text().length()).min().orElse(0),
                 allSegments.stream().mapToInt(s -> s.text().length()).max().orElse(0),
-                allSegments.stream().mapToInt(s -> s.text().length()).average().orElse(0d));
+                allSegments.stream().mapToInt(s -> s.text().length()).average().orElse(0d)
+                );
 
         // 2. 根据内容生成文本段唯一 content_hash 
         for (TextSegment seg : allSegments) {
@@ -115,8 +108,7 @@ public class TextDocumentProcessStrategy implements DocumentProcessStrategy {
             return docCount;
         }
 
-        // 5. 分批向量化 + 写入 
-        // text-embedding-v2 单次请求最大 25 行，超出会返回 400 InvalidParameter
+        // 5. 分批向量化 + 写入 受 text-embedding-v2 单次请求最大 25 行限制，超出会返回 400 InvalidParameter
         log.info("[分片写入-{}][{}] 开始向量化写入（共 {} 个片段，每批 {} 个）...",
                 sourceTag, strategyName(), newSegments.size(), EMBEDDING_BATCH_SIZE);
         try {
