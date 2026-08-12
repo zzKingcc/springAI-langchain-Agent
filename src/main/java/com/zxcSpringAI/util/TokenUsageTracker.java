@@ -26,6 +26,12 @@ public final class TokenUsageTracker {
         s.llmOutputTokens += estimateTokens(chunk);
     }
 
+    /** 直接累加预计算的 LLM 输出 token 数（用于跨线程回调场景） */
+    public static void addLlmOutputTokens(int tokens) {
+        TokenStats s = STATS.get();
+        s.llmOutputTokens += tokens;
+    }
+
     /** 记录 Tool 调用 token（输入参数 + 输出结果） */
     public static void recordToolCall(String toolName, String input, String output) {
         TokenStats s = STATS.get();
@@ -47,7 +53,7 @@ public final class TokenUsageTracker {
     }
 
     //1、Token 估算
-    private static int estimateTokens(String text) {
+    public static int estimateTokens(String text) {
         if (text == null || text.isEmpty()) {
             return 0;
         }

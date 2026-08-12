@@ -39,11 +39,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
-import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
+import org.bsc.langgraph4j.action.AsyncNodeAction;
 
 /**
  * 基于 LangGraph4j 的 Agent 编排服务
@@ -103,6 +104,10 @@ public class AgentOrchestrationService {
      * 构建 StateGraph 并编译
      * 有向图环路 ：START → "agent" → addConditionalEdges → "tools" → "agent" (循环)
      *                                    └→ END
+     *
+     * 注意：必须使用 syncNode 而非 node_async。node_async 内部用 CompletableFuture.supplyAsync()
+     * 将节点提交到 ForkJoinPool 其他线程执行，导致 STREAMING_SINKS 按线程 ID 查不到 sink、
+     * TokenUsageTracker 的 ThreadLocal 跨线程失效。syncNode 在调用线程上同步执行，保证线程上下文一致。
      */
     private CompiledGraph<MessagesState<ChatMessage>> buildGraph() {
         try {
@@ -118,17 +123,33 @@ public class AgentOrchestrationService {
 
             //声明状态图，定义节点和边的结构
             var workflow = new MessagesStateGraph<ChatMessage>(stateSerializer)
-                    .addNode("agent", node_async(this::agentNode)) // 调用流式模型，推送 chunks 到 FluxSink，返回 AiMessage 到状态
-                    .addNode("tools", node_async(this::toolsNode)) // 调用工具执行器，根据工具调用结果更新状态
-                    .addEdge(START, "agent") // 从 START 节点到 agent 节点
+                    .addNode("agent", syncNode(this::agentNode))
+                    .addNode("tools", syncNode(this::toolsNode))
+                    .addEdge(START, "agent")
                     .addConditionalEdges("agent", edge_async(this::routeAfterAgent),
-                            Map.of("next", "tools", "exit", END)) // 条件边：根据是否调用工具，选择 next 或 exit 边
-                    .addEdge("tools", "agent"); // 从 tools 节点到 agent 节点
+                            Map.of("next", "tools", "exit", END))
+                    .addEdge("tools", "agent");
 
             return workflow.compile();
         } catch (org.bsc.langgraph4j.GraphStateException e) {
             throw new IllegalStateException("StateGraph 构建失败", e);
         }
+    }
+
+    /**
+     * 同步节点包装器：在调用线程上执行节点逻辑，不切换线程
+     *
+     * <p>替代 node_async()，避免 ForkJoinPool 线程切换导致 ThreadLocal/线程ID 上下文丢失。</p>
+     */
+    private AsyncNodeAction<MessagesState<ChatMessage>> syncNode(
+            java.util.function.Function<MessagesState<ChatMessage>, Map<String, Object>> action) {
+        return state -> {
+            try {
+                return CompletableFuture.completedFuture(action.apply(state));
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        };
     }
 
     /**
@@ -138,6 +159,8 @@ public class AgentOrchestrationService {
      */
     private Map<String, Object> agentNode(MessagesState<ChatMessage> state) {
         FluxSink<String> sink = STREAMING_SINKS.get(currentThreadId());
+        // AtomicInteger 用于在 HTTP 回调线程上线程安全地累计 token，future.join() 后转回工作线程的 ThreadLocal
+        AtomicInteger llmOutputTokens = new AtomicInteger(0);
 
         var parameters = ChatRequestParameters.builder()
                 .toolSpecifications(toolSpecs)
@@ -153,7 +176,7 @@ public class AgentOrchestrationService {
             @Override
             public void onPartialResponse(String partialResponse) {
                 if (sink != null) {
-                    TokenUsageTracker.recordLlmOutputChunk(partialResponse);
+                    llmOutputTokens.addAndGet(TokenUsageTracker.estimateTokens(partialResponse));
                     sink.next(partialResponse);
                 }
             }
@@ -170,6 +193,8 @@ public class AgentOrchestrationService {
         });
 
         AiMessage aiMessage = future.join();
+        // 回到工作线程，将回调线程上累计的 token 转入 ThreadLocal
+        TokenUsageTracker.addLlmOutputTokens(llmOutputTokens.get());
         return Map.of("messages", aiMessage);
     }
 
