@@ -24,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
+import org.bsc.langgraph4j.langchain4j.serializer.std.ChatMesssageSerializer;
+import org.bsc.langgraph4j.langchain4j.serializer.std.ToolExecutionRequestSerializer;
 import org.bsc.langgraph4j.serializer.std.ObjectStreamStateSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,6 +108,13 @@ public class AgentOrchestrationService {
         try {
             //声明状态序列化器，用于在节点之间传递状态
             var stateSerializer = new ObjectStreamStateSerializer<MessagesState<ChatMessage>>(MessagesState::new);
+
+            // 注册 LangChain4j 消息类型的自定义序列化器
+            // ChatMessage 覆盖 SystemMessage/UserMessage/AiMessage/ToolExecutionResultMessage
+            // ToolExecutionRequest 覆盖 AiMessage 中的工具调用请求
+            stateSerializer.mapper()
+                    .register(ToolExecutionRequest.class, new ToolExecutionRequestSerializer())
+                    .register(ChatMessage.class, new ChatMesssageSerializer());
 
             //声明状态图，定义节点和边的结构
             var workflow = new MessagesStateGraph<ChatMessage>(stateSerializer)

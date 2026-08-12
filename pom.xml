@@ -87,6 +87,11 @@
             <groupId>org.bsc.langgraph4j</groupId>
             <artifactId>langgraph4j-core</artifactId>
         </dependency>
+        <!--    引入LangGraph4j与LangChain4j集成模块（提供ChatMessage/ToolExecutionRequest自定义序列化器）    -->
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-langchain4j</artifactId>
+        </dependency>
 
         <!--    强制锁定ES客户端版本（BOM解析的版本与langchain4j-elasticsearch声明不一致）    -->
         <dependency>
