@@ -22,6 +22,7 @@
         <spring.boot.version>3.5.7</spring.boot.version>
         <langchain4j.version>1.18.1</langchain4j.version>
         <elasticsearch.version>9.4.4</elasticsearch.version>
+        <langgraph4j.version>1.8.17</langgraph4j.version>
     </properties>
 
     <dependencyManagement>
@@ -30,6 +31,13 @@
                 <groupId>dev.langchain4j</groupId>
                 <artifactId>langchain4j-bom</artifactId>
                 <version>${langchain4j.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.bsc.langgraph4j</groupId>
+                <artifactId>langgraph4j-bom</artifactId>
+                <version>${langgraph4j.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -74,6 +82,12 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-elasticsearch</artifactId>
         </dependency>
+        <!--    引入LangGraph4j图编排引擎    -->
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-core</artifactId>
+        </dependency>
+
         <!--    强制锁定ES客户端版本（BOM解析的版本与langchain4j-elasticsearch声明不一致）    -->
         <dependency>
             <groupId>co.elastic.clients</groupId>

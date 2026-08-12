@@ -1,33 +1,117 @@
 package com.zxcSpringAI.processor;
 
-import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.zxcSpringAI.splitter.ChineseArticleDocumentSplitter;
 import dev.langchain4j.data.document.Document;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingStore;
+import dev.langchain4j.data.segment.TextSegment;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * PDF 文档处理策略 todo
+ * PDF 文档处理策略（.pdf）
+ *
+ * <p>PDF 经 Tika/PdfBox 提取后的纯文本存在大量排版换行（句子被视觉换行打断）、
+ * 连续空行、不规则空白等问题，直接分片会导致片段质量差。
+ * 本策略在分片前先做文本清洗——按段落分组、段内断行修复、空行压缩——
+ * 再交给 {@link ChineseArticleDocumentSplitter} 做章节识别分片。</p>
  */
 @Slf4j
-public class PdfDocumentProcessStrategy implements DocumentProcessStrategy {
+public class PdfDocumentProcessStrategy extends AbstractDocumentProcessStrategy {
 
     public static final List<String> PDF_EXTENSIONS = List.of("pdf");
 
+    private final ChineseArticleDocumentSplitter splitter = new ChineseArticleDocumentSplitter();
+
     @Override
-    public int process(List<Document> documents,
-                       ElasticsearchClient esClient,
-                       String indexName,
-                       EmbeddingStore embeddingStore,
-                       EmbeddingModel embeddingModel,
-                       String sourceTag) {
+    protected List<TextSegment> splitDocuments(List<Document> documents) {
+        List<Document> cleaned = new ArrayList<>();
         for (Document doc : documents) {
-            log.error("[分片写入-{}][{}] ⚠ 当前暂不支持PDF解析，已跳过加载文件[{}]。",
-                    sourceTag, strategyName(), safeFileName(doc));
+            String raw = doc.text();
+            if (raw == null || raw.isBlank()) {
+                log.warn("[PDF分片] 文件[{}]提取文本为空（可能是扫描版PDF），跳过", safeFileName(doc));
+                continue;
+            }
+            String cleanedText = cleanPdfText(raw);
+            if (cleanedText.isBlank()) {
+                log.warn("[PDF分片] 文件[{}]清洗后文本为空，跳过", safeFileName(doc));
+                continue;
+            }
+            cleaned.add(Document.from(cleanedText, doc.metadata()));
         }
-        return 0;
+        return splitter.splitAll(cleaned);
+    }
+
+    /**
+     * PDF 文本清洗
+     *
+     * <p>核心思路：按双换行（空行）切分段落，段内的单换行视为排版断行予以修复：</p>
+     * <ul>
+     *   <li>行尾是句末标点（。！？.!?…;；）→ 保持换行，当前行独立</li>
+     *   <li>行尾非句末标点 → 判定为断行，与下一行连接（中文不加空格，英文加空格）</li>
+     *   <li>连续空行压缩为单个，保留段落分隔</li>
+     * </ul>
+     */
+    String cleanPdfText(String raw) {
+        // 统一换行符
+        String text = raw.replaceAll("\\r\\n?", "\n");
+        // 连续 3+ 换行压缩为 2 个（保留段落分隔）
+        text = text.replaceAll("\\n{3,}", "\n\n");
+
+        String[] paragraphs = text.split("\\n{2}");
+        StringBuilder result = new StringBuilder();
+
+        for (String para : paragraphs) {
+            String trimmedPara = para.trim();
+            if (trimmedPara.isEmpty()) continue;
+
+            String[] lines = trimmedPara.split("\\n");
+            StringBuilder paraBuilder = new StringBuilder();
+
+            for (String rawLine : lines) {
+                String line = rawLine.trim();
+                if (line.isEmpty()) continue;
+
+                if (paraBuilder.length() == 0) {
+                    paraBuilder.append(line);
+                } else {
+                    char lastChar = paraBuilder.charAt(paraBuilder.length() - 1);
+                    if (isSentenceEnd(lastChar)) {
+                        // 前一行以句末标点结尾，当前行另起
+                        paraBuilder.append("\n").append(line);
+                    } else {
+                        // 断行修复：连接到当前行
+                        if (isCJK(lastChar)) {
+                            paraBuilder.append(line);
+                        } else if (line.length() > 0 && isCJK(line.charAt(0))) {
+                            paraBuilder.append(line);
+                        } else {
+                            paraBuilder.append(" ").append(line);
+                        }
+                    }
+                }
+            }
+
+            if (paraBuilder.length() > 0) {
+                if (result.length() > 0) result.append("\n\n");
+                result.append(paraBuilder);
+            }
+        }
+
+        return result.toString().trim();
+    }
+
+    /** 判断字符是否为句末标点 */
+    private boolean isSentenceEnd(char c) {
+        return c == '。' || c == '！' || c == '？'
+                || c == '!' || c == '?' || c == '.'
+                || c == '…' || c == ';' || c == '；';
+    }
+
+    /** 判断字符是否为 CJK 统一汉字 */
+    private boolean isCJK(char c) {
+        return (c >= '\u4E00' && c <= '\u9FFF') || (c >= '\u3400' && c <= '\u4DBF');
     }
 
     @Override
@@ -40,26 +124,11 @@ public class PdfDocumentProcessStrategy implements DocumentProcessStrategy {
         return "PDF类型";
     }
 
-    private String safeFileName(Document doc) {
-        try {
-            //1、文件名
-            String name = doc.metadata().getString("file_name");
-            if (name != null && !name.isBlank()) return name;
-            //2、来源路径截取
-            String src = doc.metadata().getString("source");
-            if (src != null && !src.isBlank()) {
-                int sep = Math.max(src.lastIndexOf('/'), src.lastIndexOf('\\'));
-                return sep >= 0 ? src.substring(sep + 1) : src;
-            }
-            //3、绝对路径截取
-            String abs = doc.metadata().getString("absolute_path");
-            if (abs != null && !abs.isBlank()) {
-                int sep = Math.max(abs.lastIndexOf('/'), abs.lastIndexOf('\\'));
-                return sep >= 0 ? abs.substring(sep + 1) : abs;
-            }
-        } catch (Exception e) {
-            log.error("提取文件名时出错", e);
-        }
-        return "(unknown)";
+    /**
+     * 判断给定扩展名是否为 PDF 类型
+     */
+    public static boolean isPdfExtension(String ext) {
+        if (ext == null || ext.isBlank()) return false;
+        return PDF_EXTENSIONS.contains(ext.toLowerCase(Locale.ROOT));
     }
 }

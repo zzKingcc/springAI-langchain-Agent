@@ -130,7 +130,7 @@ public class VectorStoreUtil {
                     .index(indexName)
                     .withJson(new java.io.StringReader(mappingJson)));
 
-            log.warn("[ES] 索引[{}]创建成功（IK分词器 mapping，dims={}）", indexName, dims);
+            log.info("[ES] 索引[{}]创建成功（IK分词器 mapping，dims={}）", indexName, dims);
         } catch (Exception e) {
             log.warn("[ES] 创建IK mapping索引失败（ES可能未安装IK插件），"
                     + "将降级为LangChain4j默认创建。原因: {}", e.getMessage());

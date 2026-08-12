@@ -16,7 +16,7 @@ public class SpringElasticsearchProperties {
     /** 服务端 HTTP 端口 */
     private int port = 9200;
 
-    /** 协议（http 或 https） */
+    /** 连接协议 */
     private String scheme = "http";
 
     /** 连接用户名，未启用安全认证时可为 null */

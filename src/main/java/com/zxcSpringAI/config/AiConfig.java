@@ -67,18 +67,21 @@ public class AiConfig {
 
         String indexName = ragEsProps.getIndexName();
 
+        //诊断 es
         VectorStoreUtil.diagnoseElasticsearch(esClient, indexName);
+        //按需重建 es
         VectorStoreUtil.deleteIndexIfNeeded(esClient, indexName, ragEsProps.isDeleteOnStartup());
         // 删除旧索引后、LangChain4j 构建前，创建带 IK 分词器的自定义 mapping（支持后续混合检索）
         VectorStoreUtil.createIndexWithIkMapping(esClient, indexName, 1536);
-
+        //构建向量存储器
         ElasticsearchEmbeddingStore embeddingStore = ElasticsearchEmbeddingStore.builder()
                 .client(esClient)
                 .indexName(indexName)
                 .configuration(ElasticsearchConfigurationScript.builder().build())
                 .build();
-
+        //加载本地知识库文档，向量写入 ES 索引
         DocumentIngestor.ingestKnowledgeBase(esClient, indexName, embeddingStore, embeddingModel);
+        //写入完成后执行索引校验
         VectorStoreUtil.writeAfterVerify(esClient, indexName);
         return embeddingStore;
     }
