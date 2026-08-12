@@ -95,31 +95,33 @@ public class VectorStoreUtil {
             // 使用原始 JSON 构建 mapping（Java API Builder 对 analyzer 支持不直观）
             String mappingJson = """
                     {
-                      "properties": {
-                        "vector": {
-                          "type": "dense_vector",
-                          "dims": %d,
-                          "index": true,
-                          "similarity": "cosine"
-                        },
-                        "text": {
-                          "type": "text",
-                          "analyzer": "ik_max_word",
-                          "search_analyzer": "ik_smart",
-                          "fields": {
-                            "keyword": {
-                              "type": "keyword",
-                              "ignore_above": 256
+                      "mappings": {
+                        "properties": {
+                          "vector": {
+                            "type": "dense_vector",
+                            "dims": %d,
+                            "index": true,
+                            "similarity": "cosine"
+                          },
+                          "text": {
+                            "type": "text",
+                            "analyzer": "ik_max_word",
+                            "search_analyzer": "ik_smart",
+                            "fields": {
+                              "keyword": {
+                                "type": "keyword",
+                                "ignore_above": 256
+                              }
                             }
-                          }
-                        },
-                        "metadata": {
-                          "type": "object",
-                          "enabled": true,
-                          "properties": {
-                            "file_name":     { "type": "keyword" },
-                            "section_title": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
-                            "content_hash":  { "type": "keyword" }
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "enabled": true,
+                            "properties": {
+                              "file_name":     { "type": "keyword" },
+                              "section_title": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+                              "content_hash":  { "type": "keyword" }
+                            }
                           }
                         }
                       }

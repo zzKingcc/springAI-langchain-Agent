@@ -60,7 +60,7 @@ rag:
     # 向量索引名称（LangChain4j存储embedding的索引）
     index-name: rag_embeddings
     # 启动时删除旧索引重建（首次部署或索引结构变更时设为 true，正常运行时设为 false）
-    delete-on-startup: false
+    delete-on-startup: true
 
 # ========== AI提示词配置 ==========
 ai:
@@ -80,4 +80,4 @@ ai:
 
 logging:
   level:
-    dev.langchain4j: DEBUG
+    dev.langchain4j: warn
