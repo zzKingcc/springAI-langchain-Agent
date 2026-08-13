@@ -5,16 +5,16 @@ server:
 langchain4j:
   open-ai:
     chat-model:
-      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
-      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
+      base-url: 
+      api-key: 
       model-name: "qwen3.7-plus"
       temperature: 0.5
       max-tokens: 2048
       log-requests: true
       log-responses: true
     streaming-chat-model:
-      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
-      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
+      base-url: 
+      api-key: 
       model-name: "qwen3.7-plus"
       temperature: 0.5
       max-tokens: 2048
@@ -22,8 +22,8 @@ langchain4j:
       log-responses: true
     # DashScope文本向量模型（兼容OpenAI接口），维度1536，与rag.elasticsearch.embedding-dimension保持一致
     embedding-model:
-      base-url: "https://ws-f4nh01w1a7xscto3.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
-      api-key: sk-ws-H.EREXLIM.SqhI.MEYCIQCcoRRb29i49PM6939NkUJot3O_8LfGTAlrShSrrXrWQQIhAPDEnXbTiB05GJzfMeABCSdiuvYAKnbacDQ4P_a5kO7a
+      base-url: 
+      api-key: 
       model-name: "text-embedding-v2"
 #      log-requests: true
 #      log-responses: true
@@ -31,7 +31,7 @@ langchain4j:
 
 spring:
   elasticsearch: # elastic-search 配置 9.4.4+IK分词
-    host: 218.244.140.199
+    host:
     port: 9200
     connectTimeout: 5000 # 连接超时时间 单位 毫秒
     socketTimeout: 10000 # 读取超时时间 单位 毫秒
@@ -42,9 +42,9 @@ spring:
   data: #redis 配置
     redis:  # Redis配置
       # Redis地址对齐网关
-      host: 218.244.140.199
+      host: 
       port: 6379
-      password: zxc404.202
+      password: 
       database: 0
       timeout: 2000ms
       lettuce:
