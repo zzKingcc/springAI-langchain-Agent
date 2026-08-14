@@ -47,4 +47,16 @@ public class MemoryConfig {
                 redisChatMemoryStore
         );
     }
+
+    /**
+     * Graph 检查点持久化 Bean
+     *
+     * <p>用于 LangGraph4j 的 interrupt/resume 机制:中断时 checkpoint 落 Redis,
+     * resume 时从 Redis 恢复状态。支持跨实例/重启续跑。</p>
+     */
+    @Bean
+    public RedisCheckpointSaver redisCheckpointSaver(StringRedisTemplate stringRedisTemplate) {
+        log.info("[检查点] RedisCheckpointSaver 初始化,用于 graph interrupt/resume 断点续跑");
+        return new RedisCheckpointSaver(stringRedisTemplate);
+    }
 }

@@ -79,6 +79,27 @@ public class DualConstraintChatMemory implements ChatMemory {
         store.deleteMessages(id);
     }
 
+    /**
+     * 移除最后一条消息(用于任务停止时回滚 UserMessage)
+     *
+     * <p>停止时 memory.add(UserMessage) 已入库,需移除该条让记忆回到提问前状态。
+     * 直接操作 store 读写,复用淘汰逻辑保证约束。</p>
+     *
+     * @return true=移除成功; false=记忆为空无可移除
+     */
+    public boolean removeLastMessage() {
+        List<ChatMessage> messages = new ArrayList<>(store.getMessages(id));
+        if (messages.isEmpty()) {
+            log.debug("[会话记忆] 会话[{}] removeLastMessage: 记忆为空,无可移除", id);
+            return false;
+        }
+        ChatMessage removed = messages.remove(messages.size() - 1);
+        store.updateMessages(id, messages);
+        log.info("[会话记忆] 会话[{}] 移除最后一条消息,类型={}, 剩余 {} 条",
+                id, removed.getClass().getSimpleName(), messages.size());
+        return true;
+    }
+
 
     /**
      * 估算消息列表的总 Token 数

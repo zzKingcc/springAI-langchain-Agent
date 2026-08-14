@@ -14,9 +14,8 @@ import java.util.regex.Pattern;
 /**
  * 中文文章文档分片器
  */
+@Slf4j
 public class ChineseArticleDocumentSplitter implements DocumentSplitter {
-
-    private static final Logger log = LoggerFactory.getLogger(ChineseArticleDocumentSplitter.class);
 
     private static final Pattern SECTION_HEADER = Pattern.compile(
             "^\\s*" +
