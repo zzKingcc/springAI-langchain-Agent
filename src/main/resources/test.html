@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent 状态机调试台</title>
+    <style>
+        :root { 
+            --bg: #f5f7fa; 
+            --chat-bg: #fff; 
+            --input-bg: #fff;
+            --user-msg: #007bff; 
+            --ai-msg: #fff; 
+            --border: #e2e8f0; 
+            --text: #1e293b; 
+            --shadow: 0 -4px 12px rgba(0,0,0,0.05);
+        }
+        * { box-sizing: border-box; outline: none; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: var(--bg); height: 100vh; display: flex; flex-direction: column; color: var(--text); }
+        
+        /* 顶部控制栏 */
+        header { background: var(--chat-bg); padding: 12px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-right { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+        header input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; width: 260px; font-size: 13px; font-family: monospace; background: #f8fafc; transition: border 0.2s; }
+        header input:focus { border-color: #007bff; background: #fff; }
+        .btn-icon { background: none; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #64748b; font-size: 12px; transition: all 0.2s; }
+        .btn-icon:hover { background: #f1f5f9; color: #007bff; border-color: #007bff; }
+
+        /* 聊天区域 */
+        #chat-box { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+        .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; line-height: 1.6; font-size: 15px; white-space: pre-wrap; word-break: break-word; position: relative; }
+        .user { align-self: flex-end; background: var(--user-msg); color: #fff; border-bottom-right-radius: 2px; box-shadow: 0 2px 4px rgba(0,123,255,0.2); }
+        .ai   { align-self: flex-start; background: var(--ai-msg); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); }
+        .sys  { align-self: center; background: rgba(255,255,255,0.8); color: #64748b; font-size: 12px; padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); margin: 8px 0; }
+        
+        /* ===== 全新底部输入区 ===== */
+        footer { 
+            background: var(--input-bg); 
+            padding: 16px 24px 20px;          /* 更舒展的上下内边距 */
+            border-top: 1px solid var(--border); 
+            box-shadow: var(--shadow);
+            display: flex; 
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-wrapper { 
+            display: flex; 
+            gap: 10px; 
+            align-items: flex-end; 
+            background: #f8fafc; 
+            border: 1px solid var(--border); 
+            border-radius: 20px;              /* 更大圆角，更现代 */
+            padding: 8px 12px 8px 18px;        /* 左右内边距不对称，视觉平衡 */
+            transition: border 0.2s, box-shadow 0.2s, background 0.2s; 
+        }
+        .input-wrapper:focus-within { 
+            border-color: #007bff; 
+            box-shadow: 0 0 0 4px rgba(0,123,255,0.12); 
+            background: #ffffff; 
+        }
+
+        textarea { 
+            flex: 1; 
+            padding: 10px 0;                  /* 上下内边距，左右由父级控制 */
+            border: none; 
+            background: transparent; 
+            resize: none; 
+            font-family: inherit; 
+            font-size: 15px; 
+            line-height: 1.6;
+            height: 28px;                     /* 初始高度稍高 */
+            max-height: 160px;
+            overflow-y: auto;
+            color: var(--text);
+        }
+        textarea::placeholder { 
+            color: #a0b3cc; 
+            font-weight: 400;
+            letter-spacing: 0.3px;
+        }
+
+        .btn-group { 
+            display: flex; 
+            gap: 10px; 
+            align-items: center;
+            flex-shrink: 0;                   /* 防止按钮被压缩 */
+        }
+
+        .btn { 
+            padding: 9px 22px; 
+            border: none; 
+            border-radius: 40px;              /* 胶囊按钮 */
+            cursor: pointer; 
+            font-weight: 600; 
+            font-size: 14px; 
+            color: #fff; 
+            transition: transform 0.15s, opacity 0.2s, box-shadow 0.2s; 
+            white-space: nowrap;
+            letter-spacing: 0.4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        }
+        .btn:active { transform: scale(0.94); }
+        .btn:focus-visible { outline: 2px solid rgba(0,123,255,0.5); }
+
+        #btn-send { 
+            background: linear-gradient(135deg, #007bff, #0056d4); 
+            box-shadow: 0 4px 10px rgba(0,123,255,0.25);
+        }
+        #btn-send:hover:not(:disabled) { 
+            box-shadow: 0 6px 14px rgba(0,123,255,0.35);
+            opacity: 0.9;
+        }
+        #btn-send:disabled { 
+            background: #b0c4de; 
+            cursor: not-allowed; 
+            box-shadow: none;
+            opacity: 0.7;
+            transform: none;
+        }
+
+        #btn-stop { 
+            background: linear-gradient(135deg, #f87171, #dc2626); 
+            display: none; 
+            box-shadow: 0 4px 10px rgba(239,68,68,0.25);
+        }
+        #btn-stop:hover { 
+            box-shadow: 0 6px 14px rgba(239,68,68,0.35);
+            opacity: 0.9;
+        }
+
+        /* 右下角微小提示 (可选) */
+        .footer-hint {
+            display: flex;
+            justify-content: flex-end;
+            font-size: 12px;
+            color: #94a3b8;
+            padding-right: 4px;
+            letter-spacing: 0.2px;
+            user-select: none;
+        }
+
+        /* 响应式微调 */
+        @media (max-width: 600px) {
+            header { padding: 12px 16px; }
+            header input { width: 160px; }
+            #chat-box { padding: 16px; }
+            footer { padding: 12px 16px 16px; }
+            .msg { max-width: 90%; }
+            .input-wrapper { padding: 6px 10px 6px 14px; }
+            .btn { padding: 7px 16px; font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <span style="font-weight: 600; font-size: 14px; margin-right: 8px;">🔌 调试会话</span>
+            <input type="text" id="session-id" placeholder="Session ID">
+            <button class="btn-icon" onclick="document.getElementById('session-id').value = crypto.randomUUID()">🔄 生成</button>
+        </div>
+        <div class="header-right">
+            <span>Target: <code>/test/agent/...</code></span>
+        </div>
+    </header>
+
+    <div id="chat-box">
+        <div class="sys">🟢 系统已连接。请输入指令测试 Agent 编排与状态机流转。</div>
+    </div>
+
+    <footer>
+        <div class="input-wrapper">
+            <textarea id="input" placeholder="输入指令... (Shift+Enter 换行)" rows="1" oninput="autoResize(this)"></textarea>
+            <div class="btn-group">
+                <button id="btn-stop" class="btn" onclick="handleStop()">停止</button>
+                <button id="btn-send" class="btn" onclick="handleSend()">发送</button>
+            </div>
+        </div>
+        <div class="footer-hint">⏎ Enter 发送 · Shift+Enter 换行</div>
+    </footer>
+
+<script>
+    const BASE_URL = 'http://localhost:8080/test';
+    let controller = null;
+    let currentAiBubble = null;
+
+    // 1. 自动调整输入框高度
+    function autoResize(textarea) {
+        textarea.style.height = '28px';
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+    }
+
+    // 2. 键盘事件监听
+    document.getElementById('input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    });
+
+    // 3. 发送逻辑 (完全保留原逻辑)
+    async function handleSend(isResume = false, approved = true) {
+        const sid = document.getElementById('session-id').value || crypto.randomUUID();
+        document.getElementById('session-id').value = sid;
+        const inputEl = document.getElementById('input');
+        const text = isResume ? `[RESUME: ${approved ? '✅ Approved' : '❌ Denied'}]` : inputEl.value.trim();
+        
+        if (!isResume && !text) return;
+        if (!isResume) { inputEl.value = ''; inputEl.style.height = '28px'; }
+
+        if (!isResume) addMessage(text, 'user');
+        currentAiBubble = addMessage('🔄 Agent 思考中...', 'ai');
+        toggleButtons(true);
+
+        controller = new AbortController();
+
+        try {
+            const url = isResume 
+                ? `${BASE_URL}/agent/resume/${encodeURIComponent(sid)}?approved=${approved}`
+                : `${BASE_URL}/agent/${encodeURIComponent(sid)}/${encodeURIComponent(text)}`;
+
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullContent = '';
+            currentAiBubble.textContent = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                const intIdx = buffer.indexOf('__INTERRUPT__:');
+                if (intIdx !== -1) {
+                    fullContent += buffer.substring(0, intIdx);
+                    currentAiBubble.textContent = fullContent;
+                    
+                    const payloadStr = buffer.substring(intIdx + 14).trim();
+                    try {
+                        const payload = JSON.parse(payloadStr);
+                        const reqApproval = payload.tools.some(t => t.requireApproval);
+                        
+                        if (reqApproval) {
+                            const toolNames = payload.tools.map(t => t.name).join(', ');
+                            const args = JSON.stringify(payload.tools[0]?.arguments || {}, null, 2);
+                            
+                            const userApproved = confirm(`⚠️ 工具调用拦截\n\n🔧 工具: ${toolNames}\n📦 参数:\n${args}\n\n是否允许执行？`);
+                            if (userApproved) {
+                                addMessage('✅ 用户确认，正在恢复...', 'sys');
+                                await handleSend(true, true);
+                            } else {
+                                addMessage('❌ 用户拒绝', 'sys');
+                                await handleSend(true, false);
+                            }
+                            return;
+                        }
+                    } catch (e) { console.warn('Payload parse error:', e); }
+                }
+
+                fullContent += buffer;
+                buffer = '';
+                currentAiBubble.textContent = fullContent;
+                scrollToBottom();
+            }
+            
+            addMessage('✨ 处理完成', 'sys');
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                addMessage('⛔ 请求已停止', 'sys');
+            } else {
+                addMessage(`❌ 异常: ${err.message}`, 'sys');
+            }
+        } finally {
+            toggleButtons(false);
+            controller = null;
+        }
+    }
+
+    async function handleStop() {
+        const sid = document.getElementById('session-id').value;
+        if (!sid || !controller) return;
+
+        controller.abort();
+        try {
+            await fetch(`${BASE_URL}/agent/stop/${encodeURIComponent(sid)}`, { method: 'POST' });
+        } catch (e) { console.warn('Stop API call failed', e); }
+    }
+
+    function addMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.textContent = text;
+        document.getElementById('chat-box').appendChild(div);
+        scrollToBottom();
+        return div;
+    }
+
+    function toggleButtons(isLoading) {
+        document.getElementById('btn-send').disabled = isLoading;
+        document.getElementById('btn-send').innerText = isLoading ? '处理中...' : '发送';
+        document.getElementById('btn-stop').style.display = isLoading ? 'inline-block' : 'none';
+    }
+
+    function scrollToBottom() {
+        const box = document.getElementById('chat-box');
+        box.scrollTop = box.scrollHeight;
+    }
+</script>
+</body>
+</html>

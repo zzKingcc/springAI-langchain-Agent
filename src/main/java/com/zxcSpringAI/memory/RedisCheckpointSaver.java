@@ -4,6 +4,8 @@ import com.zxcSpringAI.exception.ChatMemoryException;
 import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.checkpoint.Checkpoint;
+import org.bsc.langgraph4j.serializer.StateSerializer;
+import org.bsc.langgraph4j.serializer.std.CheckpointListSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -13,14 +15,6 @@ import java.util.*;
 
 /**
  * 基于 Redis 的 graph 检查点持久化
- *
- * <p>每个 threadId 对应一条 Redis 记录,存储该会话的全部 Checkpoint 列表(按写入顺序)。
- * 用于支持 interrupt/resume 断点续跑:中断时 graph 自动调 put 落盘,
- * resume 时调 get 读取最新 checkpoint 恢复状态。</p>
- *
- * <p>序列化方式:Java 原生 ObjectOutputStream。Checkpoint.state 是 Map&lt;String,Object&gt;,
- * 内含 LangChain4j 的 ChatMessage / ToolExecutionRequest 等对象,用 Jackson 会丢失类型,
- * 这里与 AgentOrchestrationService 注册的 ObjectStreamStateSerializer 保持一致。</p>
  */
 public class RedisCheckpointSaver implements BaseCheckpointSaver {
 
@@ -30,16 +24,18 @@ public class RedisCheckpointSaver implements BaseCheckpointSaver {
     private static final String KEY_PREFIX = "graph:checkpoint:";
 
     private final StringRedisTemplate redisTemplate;
+    private final CheckpointListSerializer checkpointListSerializer;
 
-    public RedisCheckpointSaver(StringRedisTemplate redisTemplate) {
+    public RedisCheckpointSaver(StringRedisTemplate redisTemplate, StateSerializer<?> stateSerializer) {
         this.redisTemplate = redisTemplate;
+        this.checkpointListSerializer = new CheckpointListSerializer(stateSerializer);
     }
 
     @Override
     public Collection<Checkpoint> list(RunnableConfig config) {
         String key = buildKey(config);
         try {
-            List<Checkpoint> all = readAll(key);
+            LinkedList<Checkpoint> all = readAll(key);
             // 反转:最新在前,符合 BaseCheckpointSaver 的约定(getStateHistory 取第一个为最新)
             Collections.reverse(all);
             return all;
@@ -55,7 +51,7 @@ public class RedisCheckpointSaver implements BaseCheckpointSaver {
     public Optional<Checkpoint> get(RunnableConfig config) {
         String key = buildKey(config);
         try {
-            List<Checkpoint> all = readAll(key);
+            LinkedList<Checkpoint> all = readAll(key);
             if (all.isEmpty()) {
                 log.debug("[检查点] get 会话[{}]: 无检查点", threadId(config));
                 return Optional.empty();
@@ -85,7 +81,7 @@ public class RedisCheckpointSaver implements BaseCheckpointSaver {
     public RunnableConfig put(RunnableConfig config, Checkpoint checkpoint) throws Exception {
         String key = buildKey(config);
         try {
-            List<Checkpoint> all = readAll(key);
+            LinkedList<Checkpoint> all = readAll(key);
             all.add(checkpoint);
             writeAll(key, all);
             log.info("[检查点] put 会话[{}]: 写入 checkpoint={}, node={}, next={}, 累计={}",
@@ -108,7 +104,7 @@ public class RedisCheckpointSaver implements BaseCheckpointSaver {
     public Tag release(RunnableConfig config) throws Exception {
         String key = buildKey(config);
         try {
-            List<Checkpoint> all = readAll(key);
+            LinkedList<Checkpoint> all = readAll(key);
             Tag tag = new Tag(threadId(config), all);
             redisTemplate.delete(key);
             log.info("[检查点] release 会话[{}]: 释放 {} 个检查点", threadId(config), all.size());
@@ -128,28 +124,27 @@ public class RedisCheckpointSaver implements BaseCheckpointSaver {
     /**
      * 读取 threadId 下全部 checkpoint,保持写入顺序(旧→新)
      */
-    @SuppressWarnings("unchecked")
-    private List<Checkpoint> readAll(String key) {
+    private LinkedList<Checkpoint> readAll(String key) {
         String base64 = redisTemplate.opsForValue().get(key);
         if (base64 == null || base64.isBlank()) {
-            return new ArrayList<>();
+            return new LinkedList<>();
         }
         byte[] bytes = Base64.getDecoder().decode(base64);
         try (ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(bytes))) {
-            return (List<Checkpoint>) ois.readObject();
+            return checkpointListSerializer.read(ois);
         } catch (Exception e) {
             log.warn("[检查点] 反序列化失败,当作空列表处理: {}", e.getMessage());
-            return new ArrayList<>();
+            return new LinkedList<>();
         }
     }
 
     /**
      * 写入 threadId 下全部 checkpoint
      */
-    private void writeAll(String key, List<Checkpoint> all) throws IOException {
+    private void writeAll(String key, LinkedList<Checkpoint> all) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (ObjectOutputStream oos = new ObjectOutputStream(baos)) {
-            oos.writeObject(all);
+            checkpointListSerializer.write(all, oos);
         }
         String base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
         redisTemplate.opsForValue().set(key, base64);

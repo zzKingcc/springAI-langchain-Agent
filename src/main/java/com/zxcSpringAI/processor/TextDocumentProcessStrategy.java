@@ -10,9 +10,6 @@ import java.util.Locale;
 
 /**
  * 文本类型文档处理策略（.txt .md .markdown .text）
- *
- * <p>直接使用 {@link ChineseArticleDocumentSplitter} 按中文章节边界分片，
- * 去重与向量化流程由 {@link AbstractDocumentProcessStrategy} 统一封装。</p>
  */
 @Slf4j
 public class TextDocumentProcessStrategy extends AbstractDocumentProcessStrategy {

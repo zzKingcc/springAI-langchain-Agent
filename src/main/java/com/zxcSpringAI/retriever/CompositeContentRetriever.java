@@ -215,7 +215,9 @@ public class CompositeContentRetriever implements ContentRetriever {
         return Set.of(query.toLowerCase().split("[\\s，。！？、；：\"'（）《》\\[\\]【】,.!?;:()]+"));
     }
 
-    //去重辅助
+    /**
+     * 去重辅助函数：对内容文本进行 SHA-256 哈希，作为唯一标识
+     */
     private String hashContent(Content content) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -226,8 +228,8 @@ public class CompositeContentRetriever implements ContentRetriever {
         }
     }
 
-    //内部数据结构
     /**
+     * 内部数据结构
      * 单条检索结果的分数记录，用于融合计算
      */
     private static class ScoreEntry {

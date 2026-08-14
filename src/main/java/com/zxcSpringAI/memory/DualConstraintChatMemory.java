@@ -81,9 +81,8 @@ public class DualConstraintChatMemory implements ChatMemory {
 
     /**
      * 移除最后一条消息(用于任务停止时回滚 UserMessage)
-     *
-     * <p>停止时 memory.add(UserMessage) 已入库,需移除该条让记忆回到提问前状态。
-     * 直接操作 store 读写,复用淘汰逻辑保证约束。</p>
+     * 停止时 memory.add(UserMessage) 已入库,需移除该条让记忆回到提问前状态。
+     * 直接操作 store 读写,复用淘汰逻辑保证约束。
      *
      * @return true=移除成功; false=记忆为空无可移除
      */

@@ -1,6 +1,12 @@
 package com.zxcSpringAI.memory;
 
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import org.bsc.langgraph4j.langchain4j.serializer.std.ChatMesssageSerializer;
+import org.bsc.langgraph4j.langchain4j.serializer.std.ToolExecutionRequestSerializer;
+import org.bsc.langgraph4j.prebuilt.MessagesState;
+import org.bsc.langgraph4j.serializer.std.ObjectStreamStateSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -49,14 +55,35 @@ public class MemoryConfig {
     }
 
     /**
+     * Graph 状态序列化器 Bean（共享）
+     *
+     * <p>注册 ChatMessage / ToolExecutionRequest 自定义序列化器,
+     * 供 MessagesStateGraph 和 RedisCheckpointSaver 共用,
+     * 确保 Checkpoint 中的 LangChain4j 对象能正确序列化/反序列化。</p>
+     */
+    @Bean
+    public ObjectStreamStateSerializer<MessagesState<ChatMessage>> graphStateSerializer() {
+        var serializer = new ObjectStreamStateSerializer<MessagesState<ChatMessage>>(MessagesState::new);
+        serializer.mapper()
+                .register(ToolExecutionRequest.class, new ToolExecutionRequestSerializer())
+                .register(ChatMessage.class, new ChatMesssageSerializer());
+        log.info("[检查点] ObjectStreamStateSerializer 初始化,已注册 ChatMessage/ToolExecutionRequest 序列化器");
+        return serializer;
+    }
+
+    /**
      * Graph 检查点持久化 Bean
      *
      * <p>用于 LangGraph4j 的 interrupt/resume 机制:中断时 checkpoint 落 Redis,
-     * resume 时从 Redis 恢复状态。支持跨实例/重启续跑。</p>
+     * resume 时从 Redis 恢复状态。支持跨实例/重启续跑。
+     * 使用与 graph 共享的 StateSerializer 构造 CheckpointListSerializer,
+     * 确保序列化兼容性。</p>
      */
     @Bean
-    public RedisCheckpointSaver redisCheckpointSaver(StringRedisTemplate stringRedisTemplate) {
+    public RedisCheckpointSaver redisCheckpointSaver(
+            StringRedisTemplate stringRedisTemplate,
+            ObjectStreamStateSerializer<MessagesState<ChatMessage>> graphStateSerializer) {
         log.info("[检查点] RedisCheckpointSaver 初始化,用于 graph interrupt/resume 断点续跑");
-        return new RedisCheckpointSaver(stringRedisTemplate);
+        return new RedisCheckpointSaver(stringRedisTemplate, graphStateSerializer);
     }
 }

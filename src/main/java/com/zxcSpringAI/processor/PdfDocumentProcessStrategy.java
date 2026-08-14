@@ -11,11 +11,6 @@ import java.util.Locale;
 
 /**
  * PDF 文档处理策略（.pdf）
- *
- * <p>PDF 经 Tika/PdfBox 提取后的纯文本存在大量排版换行（句子被视觉换行打断）、
- * 连续空行、不规则空白等问题，直接分片会导致片段质量差。
- * 本策略在分片前先做文本清洗——按段落分组、段内断行修复、空行压缩——
- * 再交给 {@link ChineseArticleDocumentSplitter} 做章节识别分片。</p>
  */
 @Slf4j
 public class PdfDocumentProcessStrategy extends AbstractDocumentProcessStrategy {
@@ -45,13 +40,6 @@ public class PdfDocumentProcessStrategy extends AbstractDocumentProcessStrategy 
 
     /**
      * PDF 文本清洗
-     *
-     * <p>核心思路：按双换行（空行）切分段落，段内的单换行视为排版断行予以修复：</p>
-     * <ul>
-     *   <li>行尾是句末标点（。！？.!?…;；）→ 保持换行，当前行独立</li>
-     *   <li>行尾非句末标点 → 判定为断行，与下一行连接（中文不加空格，英文加空格）</li>
-     *   <li>连续空行压缩为单个，保留段落分隔</li>
-     * </ul>
      */
     String cleanPdfText(String raw) {
         // 统一换行符

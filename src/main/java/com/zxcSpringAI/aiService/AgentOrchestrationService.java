@@ -30,8 +30,6 @@ import org.bsc.langgraph4j.RunnableConfig;
 import org.bsc.langgraph4j.checkpoint.BaseCheckpointSaver;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
-import org.bsc.langgraph4j.langchain4j.serializer.std.ChatMesssageSerializer;
-import org.bsc.langgraph4j.langchain4j.serializer.std.ToolExecutionRequestSerializer;
 import org.bsc.langgraph4j.serializer.std.ObjectStreamStateSerializer;
 import org.bsc.langgraph4j.state.StateSnapshot;
 import reactor.core.publisher.Flux;
@@ -57,12 +55,12 @@ import org.bsc.langgraph4j.action.AsyncNodeAction;
 /**
  * 基于 LangGraph4j 的 Agent 编排服务(带断点状态机)
  *
- * <p>图结构:START → agent → (条件边: 工具类型?) ─┬→ exit → END
+ * 图结构:START → agent → (条件边: 工具类型?) ─┬→ exit → END
  *                                              ├→ auto → tools → agent (循环, 自主工具直连不中断)
- *                                              └→ review(中断) → tools → agent (需授权工具, 人工 approve 后继续)</p>
+ *                                              └→ review(中断) → tools → agent (需授权工具, 人工 approve 后继续)
  *
- * <p>中断机制:review 节点前通过 CompileConfig.interruptBefore 暂停,checkpoint 落 Redis。
- * 前端收到 __INTERRUPT__ 事件后弹审核 UI,用户 approve 调 resume 方法继续执行。</p>
+ * 中断机制:review 节点前通过 CompileConfig.interruptBefore 暂停,checkpoint 落 Redis。
+ * 前端收到 __INTERRUPT__ 事件后弹审核 UI,用户 approve 调 resume 方法继续执行。
  */
 @Slf4j
 public class AgentOrchestrationService {
@@ -81,6 +79,7 @@ public class AgentOrchestrationService {
     private final Set<String> toolsRequiringApproval;
     private final CancellationTracker cancellationTracker;
     private final BaseCheckpointSaver checkpointSaver;
+    private final ObjectStreamStateSerializer<MessagesState<ChatMessage>> stateSerializer;
 
     /** 按线程 ID 存储流式 sink,供 agent 节点推送 chunks */
     @SuppressWarnings("deprecation")
@@ -100,12 +99,14 @@ public class AgentOrchestrationService {
             Tools tools,
             String systemMessage,
             BaseCheckpointSaver checkpointSaver,
+            ObjectStreamStateSerializer<MessagesState<ChatMessage>> stateSerializer,
             CancellationTracker cancellationTracker) {
 
         this.streamingChatModel = streamingChatModel;
         this.chatMemoryProvider = chatMemoryProvider;
         this.systemMessage = systemMessage;
         this.checkpointSaver = checkpointSaver;
+        this.stateSerializer = stateSerializer;
         this.cancellationTracker = cancellationTracker;
 
         // 从 Tools 对象提取 @Tool 规格和执行器,同步判断是否需授权
@@ -123,7 +124,7 @@ public class AgentOrchestrationService {
             }
         }
 
-        this.compiledGraph = buildGraph(checkpointSaver);
+        this.compiledGraph = buildGraph();
 
         log.info("[Agent编排-LangGraph] 初始化完成,已注册 {} 个工具(其中 {} 个需授权),图结构: agent→(auto|review)→tools→agent(条件循环)",
                 toolSpecs.size(), toolsRequiringApproval.size());
@@ -132,20 +133,13 @@ public class AgentOrchestrationService {
     /**
      * 构建 StateGraph 并编译
      *
-     * <p>三路条件边:
-     * <ul>
-     *   <li>"exit" → END:无工具调用</li>
-     *   <li>"auto" → tools:全自主工具,直连不中断</li>
-     *   <li>"review" → review 节点:含需授权工具,interruptBefore 暂停</li>
-     * </ul>
+     * 三路条件边:
+     *   1:"exit" → END:无工具调用
+     *   2:"auto" → tools:全自主工具,直连不中断
+     *   3:"review" → review 节点:含需授权工具,interruptBefore 暂停
      */
-    private CompiledGraph<MessagesState<ChatMessage>> buildGraph(BaseCheckpointSaver checkpointSaver) {
+    private CompiledGraph<MessagesState<ChatMessage>> buildGraph() {
         try {
-            var stateSerializer = new ObjectStreamStateSerializer<MessagesState<ChatMessage>>(MessagesState::new);
-            stateSerializer.mapper()
-                    .register(ToolExecutionRequest.class, new ToolExecutionRequestSerializer())
-                    .register(ChatMessage.class, new ChatMesssageSerializer());
-
             var workflow = new MessagesStateGraph<ChatMessage>(stateSerializer)
                     .addNode("agent", syncNode(this::agentNode))
                     .addNode("review", syncNode(s -> Map.of()))   // no-op 节点,仅作中断锚点
@@ -159,7 +153,7 @@ public class AgentOrchestrationService {
             var compileConfig = org.bsc.langgraph4j.CompileConfig.builder()
                     .checkpointSaver(checkpointSaver)
                     .interruptBefore("review")    // 仅 review 节点前中断,tools 直连不暂停
-                    .releaseThread(true)          // HITL 用完即弃
+                    .releaseThread(false)         // 手动管理 checkpoint 生命周期,避免图完成后自动 release 导致 stateOf 取不到最终状态
                     .build();
 
             return workflow.compile(compileConfig);
@@ -170,8 +164,7 @@ public class AgentOrchestrationService {
 
     /**
      * 同步节点包装器:在调用线程上执行节点逻辑,不切换线程
-     *
-     * <p>替代 node_async(),避免 ForkJoinPool 线程切换导致 ThreadLocal/线程ID 上下文丢失。</p>
+     * 替代 node_async(),避免 ForkJoinPool 线程切换导致 ThreadLocal/线程ID 上下文丢失。
      */
     private AsyncNodeAction<MessagesState<ChatMessage>> syncNode(
             java.util.function.Function<MessagesState<ChatMessage>, Map<String, Object>> action) {
@@ -297,15 +290,12 @@ public class AgentOrchestrationService {
 
     /**
      * Agent 对话入口(流式)
-     *
-     * <p>流程:
-     * <ol>
-     *   <li>加载会话记忆,添加 UserMessage</li>
-     *   <li>构建初始状态: [SystemMessage] + 历史消息</li>
-     *   <li>stream 消费 graph 执行,实时推送 chunks</li>
-     *   <li>检测到中断(review 前):推送 __INTERRUPT__ 事件,挂起等待 resume</li>
-     *   <li>正常完成:将最终 AiMessage 存入会话记忆</li>
-     * </ol>
+     * 流程:
+     *   1:加载会话记忆,添加 UserMessage
+     *   2:构建初始状态: [SystemMessage] + 历史消息
+     *   3:stream 消费 graph 执行,实时推送 chunks
+     *   4:检测到中断(review 前):推送 __INTERRUPT__ 事件,挂起等待 resume
+     *   5:正常完成:将最终 AiMessage 存入会话记忆
      *
      * @param sessionId 会话 ID,同时作为 checkpoint 的 threadId
      * @param message   用户问题
@@ -331,6 +321,9 @@ public class AgentOrchestrationService {
                     RunnableConfig config = RunnableConfig.builder()
                             .threadId(sessionId)
                             .build();
+
+                    // 清除上一次执行的 checkpoint,避免 LangGraph4j 将旧状态(含历史 tool call/result)合并到本次输入
+                    checkpointSaver.release(config);
 
                     log.info("[Agent编排] 会话[{}] 开始图编排,消息数={}", sessionId, messages.size());
 
@@ -369,6 +362,7 @@ public class AgentOrchestrationService {
                             }
                         }
                         log.info("[Agent编排] 会话[{}] 图编排完成", sessionId);
+                        checkpointSaver.release(config);
                     }
                     sink.complete();
                 } catch (Exception e) {
@@ -464,6 +458,7 @@ public class AgentOrchestrationService {
                             }
                         }
                         log.info("[Agent编排-resume] 会话[{}] resume 完成", sessionId);
+                        checkpointSaver.release(config);
                     }
                     sink.complete();
                 } catch (Exception e) {
@@ -510,9 +505,6 @@ public class AgentOrchestrationService {
 
     /**
      * 判断异常链中是否包含 CancellationException
-     *
-     * <p>agentNode 的 future.completeExceptionally(CancellationException) 会被 future.join()
-     * 包裹成 CompletionException,需递归解包判断。</p>
      */
     private boolean isCancellationException(Throwable e) {
         Throwable cur = e;
@@ -527,14 +519,11 @@ public class AgentOrchestrationService {
 
     /**
      * 处理用户主动停止:回滚记忆、清 checkpoint、推送停止事件
-     *
-     * <p>三个清理动作:
-     * <ol>
-     *   <li>回滚 UserMessage: orchestrate 场景下 memory.add(UserMessage) 已入库,
-     *       需移除让记忆回到提问前状态;resume 场景未写记忆,跳过。</li>
-     *   <li>清 checkpoint: 调 checkpointSaver.release 删除会话所有状态,不可 resume。</li>
-     *   <li>推停止事件: 告知前端任务已停止。</li>
-     * </ol>
+     * 三个清理动作:
+     *   1:回滚 UserMessage: orchestrate 场景下 memory.add(UserMessage) 已入库,
+     *       需移除让记忆回到提问前状态;resume 场景未写记忆,跳过。
+     *   2:清 checkpoint: 调 checkpointSaver.release 删除会话所有状态,不可 resume。
+     *   3:推停止事件: 告知前端任务已停止。
      *
      * @param sessionId 会话 ID
      * @param sink      SSE sink,推送停止事件

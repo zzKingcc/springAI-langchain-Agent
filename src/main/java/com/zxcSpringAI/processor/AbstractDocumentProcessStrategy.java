@@ -24,10 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 文档处理策略抽象基类（模板方法模式）
- *
- * <p>封装分片后的通用处理流程：content_hash 生成 → 批次内去重 → ES 去重 → 分批向量化写入。
- * 子类只需实现 {@link #splitDocuments(List)} 提供差异化的分片逻辑。</p>
+ * 文档处理策略抽象基类
  */
 @Slf4j
 public abstract class AbstractDocumentProcessStrategy implements DocumentProcessStrategy {

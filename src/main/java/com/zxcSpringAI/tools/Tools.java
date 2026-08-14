@@ -67,12 +67,21 @@ public class Tools {
         return result;
     }
 
-    //2、知识库检索工具
+    // 2、需授权工具（测试 HITL 中断）
+
+    @Tool("查询喜羊羊公司的员工总人数，当用户问'公司有多少人'、'员工人数'、'公司规模'等问题时调用")
+    @RequireApproval(reason = "员工人数属于公司敏感信息，需要确认后才能查询")
+    public String queryEmployeeCount() {
+        String result = "喜羊羊公司当前员工总人数：666 人";
+        TokenUsageTracker.recordToolCall("queryEmployeeCount", "员工人数", result);
+        return result;
+    }
+
+    //3、知识库检索工具
 
     /**
      * 从知识库检索相关内容（向量 Top15 + 关键词 Top5 混合检索 + 分数融合重排序 Top10）
-     *
-     * <p>模型自主判断是否需要调用：纯闲聊类问题不会触发，业务知识类问题才会检索。</p>
+     * 模型自主判断是否需要调用：纯闲聊类问题不会触发，业务知识类问题才会检索。
      *
      * @param keyword 检索关键词或问题
      * @return 检索到的知识库内容片段（拼接为纯文本），无结果时返回提示
