@@ -71,7 +71,7 @@ agent 节点通过 `StreamingChatModel.chat()` 流式生成，每个 chunk 实�
 
 工具就是普通的 `@Tool` 方法，Spring `@Component` 自动扫描注册。构造 `AgentOrchestrationService` 时通过反射提取全部 `@Tool` 方法的 `ToolSpecification` 和 `DefaultToolExecutor`，同时检查是否标注 `@RequireApproval`，将需授权工具名收集到集合中供条件路由判断。
 
-新增工具只需在 `Tools` 类里加一个方法，不需要改任何编排逻辑。当前内置 7 个工具：天气类 5 个（自主）、知识库检索 1 个（自主）、员工人数查询 1 个（需授权）。
+新增工具只需在 `Tools` 类里加一个方法，不需要改任何编排逻辑。当前内置 7 个工具：天气类 5 个（自主）、知识库检索 1 个（自主）、员工人数查询 1 个（需授权）。（这些工具都是我随便编的！！）
 
 ### 混合检索
 
